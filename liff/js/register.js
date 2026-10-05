@@ -1,4 +1,4 @@
-/* スタッフ登録フォーム（主に登録内容の変更用。新規登録は LINE のトークで行う） */
+/* スタッフ登録フォーム（新規登録と登録内容の変更。新規登録ではトークで答えたお名前が入る） */
 (function () {
   'use strict';
 
@@ -20,6 +20,8 @@
         App.$('#edit-notice').hidden = false;
         App.$('#new-notice').hidden = true;
         submit.textContent = '更新する';
+      } else if (res.draft) {
+        App.fill(form, res.draft); // トークで答えたお名前
       }
       setupInterview();
       App.show('screen-form');

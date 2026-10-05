@@ -238,7 +238,7 @@ Validator_.prototype.throwIfErrors = function () {
 };
 
 /**
- * 生年月日の検証（チャットとフォームで共通）。問題があれば v にエラーを入れて null を返す。
+ * 生年月日の検証。問題があれば v にエラーを入れて null を返す。
  * @return {{birthDate: string, age: number, ageNote: string}|null}
  */
 function checkBirth_(v, key, today) {
@@ -264,7 +264,7 @@ function checkBirth_(v, key, today) {
 }
 
 /**
- * スタッフ登録（チャット・フォーム共通）の検証。
+ * スタッフ登録フォームの検証。
  * opts.interviewOptional：登録済みの人の内容変更では希望面接日時を必須にしない
  * @return {Object} シートに書き込む値
  */
@@ -287,7 +287,7 @@ function validateRegistration(input, today, opts) {
   r.gender = v.oneOf('gender', OPTIONS.gender);
 
   r.phone = v.phone('phone');
-  r.postalCode = v.postal('postalCode', { optional: true }); // チャットで「郵便番号がわからない」を選んだ場合は空
+  r.postalCode = v.postal('postalCode');
   r.prefecture = v.oneOf('prefecture', OPTIONS.prefectures);
   r.city = v.text('city', { max: 100 });
   r.building = v.text('building', { max: 100, optional: true });

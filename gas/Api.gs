@@ -40,6 +40,7 @@ function handleApi_(body) {
 function apiMe_(userId) {
   var rec = readRecord_(REG_SHEET, userId);
   var registration = null;
+  var draft = null; // トークで答えたお名前（新規登録のフォームに入れておく）
   if (rec) {
     registration = {};
     REG_EDITABLE_KEYS.forEach(function (k) {
@@ -47,8 +48,13 @@ function apiMe_(userId) {
       registration[k] = typeof v === 'string' && v.charAt(0) === "'" ? v.slice(1) : v;
     });
   }
+  if (!rec) {
+    var chat = loadChat_(userId);
+    if (chat && chat.data.lastName) draft = { lastName: chat.data.lastName, firstName: chat.data.firstName };
+  }
   return {
     ok: true,
+    draft: draft,
     options: OPTIONS,
     privacyPolicyUrl: getConfig_().privacyPolicyUrl,
     status: rec ? rec.status : null,
@@ -58,10 +64,11 @@ function apiMe_(userId) {
 }
 
 /**
- * 登録内容を検証してシートに保存する（チャット・フォーム共通）。
+ * 登録内容を検証してシートに保存する。
  * 新規登録なら管理者に通知する。お礼のメッセージは呼び出し元で送る。
  */
 function saveRegistration_(userId, input, source) {
+  source = source || 'フォーム';
   var existing = readRecord_(REG_SHEET, userId);
   var record = validateRegistration(input, new Date(), { interviewOptional: !!existing });
   // 登録済みの人の内容変更では、面接日時は入力されたときだけ上書きする
@@ -81,7 +88,7 @@ function saveRegistration_(userId, input, source) {
     record.lineName = profile ? profile.displayName : '';
   }
   writeRecord_(REG_SHEET, userId, record);
-  // チャットの途中でフォームから登録した場合なども、回答途中のデータは不要になる
+  // トークでのやりとり（お名前）は登録が済んだので不要
   deleteRecord_(CHAT_SHEET, userId);
 
   var name = record.lastName + ' ' + record.firstName;

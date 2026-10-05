@@ -1,7 +1,6 @@
 /**
  * LINE 公式アカウントの Webhook。
- * - 友だち追加 → トークでスタッフ登録の質問を開始（Chat.gs）
- * - 質問に回答中の人のメッセージ → 回答として処理
+ * - 友だち追加 → トークでお名前を聞き、続きを入力する登録フォームのボタンを送る（Chat.gs）
  * - それ以外はキーワードにだけ反応する。キーワード以外には返信しないので、
  *   LINE Official Account Manager のチャット機能で担当者が手動で返信できる。
  * ボットの返信はすべて「応答メッセージ」なので、月の無料メッセージ数を消費しない。
@@ -26,8 +25,6 @@ function handleEvent_(ev) {
       return onFollow_(ev, userId);
     case 'unfollow':
       return onUnfollow_(userId);
-    case 'postback':
-      return onPostback_(ev, userId);
     case 'message':
       if (ev.message.type === 'text') return onText_(ev, userId, ev.message.text.trim());
       return onOtherMessage_(ev, userId);
@@ -57,7 +54,12 @@ function onUnfollow_(userId) {
 
 function onText_(ev, userId, text) {
   var chat = loadChat_(userId);
-  if (chat) return continueChat_(ev, userId, chat, { text: text });
+  // お名前を聞いている間は、送られたメッセージを回答として扱う
+  if (chat && chat.step === 'name') return continueChat_(ev, userId, chat, { text: text });
+  // フォームの入力待ち：「やめる」と登録関係のキーワードにだけ反応する（それ以外は担当者が手動で対応）
+  if (chat && (text === CHAT_CANCEL || /登録|応募|フォーム|続き/.test(text))) {
+    return continueChat_(ev, userId, chat, { text: text });
+  }
 
   var rec = readRecord_(REG_SHEET, userId);
 
@@ -80,63 +82,27 @@ function onText_(ev, userId, text) {
   }
 }
 
-/** 日時選択ボタン（生年月日・面接日時）の結果 */
-function onPostback_(ev, userId) {
-  var m = /^chat=(\w+)$/.exec(ev.postback.data || '');
-  if (!m) return;
-  var chat = loadChat_(userId);
-  if (!chat) return;
-  var p = ev.postback.params || {};
-  continueChat_(ev, userId, chat, { postbackStep: m[1], date: p.date, datetime: p.datetime });
-}
-
 /** スタンプや画像など */
 function onOtherMessage_(ev, userId) {
   var chat = loadChat_(userId);
-  if (!chat) return;
-  replyMessage_(ev.replyToken, [textMessage_('文字かボタンで回答してください。')].concat(chatPrompt_(chat)));
+  if (!chat || chat.step !== 'name') return;
+  replyMessage_(ev.replyToken, [textMessage_('文字で回答してください。')].concat(chatPrompt_(chat)));
 }
 
 function startChat_(replyToken, userId, greeting) {
   var state = chatNewState_(new Date());
   saveChat_(userId, state);
-  replyMessage_(replyToken, [textMessage_(greeting +
-    'スタッフ登録のため、いくつか質問させてください（約3分）。\n' +
-    '途中でやめるときは「' + CHAT_CANCEL + '」、やり直すときは「' + CHAT_RESTART + '」と送ってください。')]
-    .concat(chatPrompt_(state)));
+  replyMessage_(replyToken, [textMessage_(greeting + 'スタッフ登録をはじめます。')].concat(chatPrompt_(state)));
 }
 
 function continueChat_(ev, userId, state, input) {
-  var res = chatAnswer_(state, input, new Date());
+  var res = chatAnswer_(state, input);
   if (res.cancelled) {
     deleteRecord_(CHAT_SHEET, userId);
-    replyMessage_(ev.replyToken, res.messages);
-    return;
+  } else {
+    saveChat_(userId, res.state);
   }
-  if (res.complete) {
-    completeChat_(ev, userId, res.state);
-    return;
-  }
-  saveChat_(userId, res.state);
   replyMessage_(ev.replyToken, res.messages);
-}
-
-function completeChat_(ev, userId, state) {
-  var result;
-  try {
-    result = saveRegistration_(userId, chatToRegistration_(state.data), 'チャット');
-  } catch (err) {
-    if (!(err instanceof ValidationError)) throw err;
-    // 確認中に面接日時が過ぎた場合など
-    var key = Object.keys(err.errors)[0];
-    state.step = 'edit';
-    saveChat_(userId, state);
-    replyMessage_(ev.replyToken, [textMessage_('確認が必要な項目があります：' + err.errors[key])].concat(chatPrompt_(state)));
-    return;
-  }
-  replyMessage_(ev.replyToken, [textMessage_(result.name + ' さん\n\nスタッフ登録ありがとうございます！\n' +
-    '面接日時を調整のうえ、担当者からこのトークでご連絡します。\n\n' +
-    '登録内容の変更は「変更」、登録状況の確認は「登録状況」と送ってください。')]);
 }
 
 function statusText_(rec) {
