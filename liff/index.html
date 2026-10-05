@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>スタッフ登録｜セブンハーツ</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>セブンハーツ スタッフ登録</h1>
+    <p>イベント運営スタッフ（日払い・日雇いアルバイト）</p>
+  </header>
+
+  <main>
+    <div id="screen-loading" data-screen class="center">
+      <div class="spinner"></div>
+      <p>読み込み中…</p>
+    </div>
+
+    <div id="screen-error" data-screen class="center" hidden>
+      <div class="big-icon">!</div>
+      <h2>エラーが発生しました</h2>
+      <p id="error-message"></p>
+    </div>
+
+    <div id="screen-done" data-screen class="center" hidden>
+      <div class="big-icon">♥</div>
+      <h2 id="done-title">登録が完了しました</h2>
+      <p id="done-message">内容を確認のうえ、担当者からLINEでご連絡します。</p>
+      <button type="button" class="primary" id="close-button">閉じる</button>
+    </div>
+
+    <form id="screen-form" data-screen hidden novalidate>
+      <p class="notice" id="edit-notice" hidden>登録済みの内容を表示しています。変更して「更新する」を押してください。</p>
+      <p class="notice" id="new-notice">入力は約3分で終わります。<span class="req">必須</span> の項目は必ず入力してください。</p>
+
+      <section class="card">
+        <h2>基本情報</h2>
+        <div class="field" data-field="lastName">
+          <div class="label">お名前<span class="req">必須</span></div>
+          <div class="row">
+            <input type="text" name="lastName" placeholder="姓（例：山田）" autocomplete="family-name" maxlength="20" required>
+            <input type="text" name="firstName" placeholder="名（例：花子）" autocomplete="given-name" maxlength="20" required>
+          </div>
+        </div>
+        <div class="field" data-field="lastNameKana">
+          <div class="label">フリガナ<span class="req">必須</span></div>
+          <div class="row">
+            <input type="text" name="lastNameKana" placeholder="セイ（例：ヤマダ）" maxlength="30" required>
+            <input type="text" name="firstNameKana" placeholder="メイ（例：ハナコ）" maxlength="30" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="birthDate">生年月日<span class="req">必須</span></label>
+          <input type="date" id="birthDate" name="birthDate" autocomplete="bday" required>
+          <p class="hint">18歳未満の方は、深夜（22〜5時）のお仕事には入れません。</p>
+        </div>
+        <div class="field" data-field="gender">
+          <div class="label">性別<span class="req">必須</span></div>
+          <div class="choices" data-options="gender" data-name="gender" data-type="radio" data-required></div>
+          <p class="hint">更衣室やユニフォームの手配に使います。</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>連絡先・住所</h2>
+        <div class="field">
+          <label for="phone">携帯電話番号<span class="req">必須</span></label>
+          <input type="tel" id="phone" name="phone" placeholder="09012345678" autocomplete="tel" inputmode="tel" required>
+          <p class="hint">当日の緊急連絡に使います。</p>
+        </div>
+        <div class="field">
+          <label for="email">メールアドレス<span class="req">必須</span></label>
+          <input type="email" id="email" name="email" placeholder="example@mail.com" autocomplete="email" required>
+        </div>
+        <div class="field">
+          <label for="postalCode">郵便番号<span class="req">必須</span></label>
+          <input type="text" id="postalCode" name="postalCode" placeholder="1234567（ハイフンなし）" inputmode="numeric" autocomplete="postal-code" maxlength="8" required>
+          <p class="hint">入力すると住所が自動で入ります。</p>
+        </div>
+        <div class="field">
+          <label for="prefecture">都道府県<span class="req">必須</span></label>
+          <select id="prefecture" name="prefecture" data-options="prefectures" required>
+            <option value="">選択してください</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="city">市区町村・番地<span class="req">必須</span></label>
+          <input type="text" id="city" name="city" placeholder="渋谷区道玄坂1-2-3" maxlength="100" required>
+        </div>
+        <div class="field">
+          <label for="building">建物名・部屋番号<span class="opt">任意</span></label>
+          <input type="text" id="building" name="building" placeholder="〇〇マンション101" maxlength="100">
+        </div>
+        <div class="field">
+          <label for="nearestStation">最寄り駅<span class="req">必須</span></label>
+          <input type="text" id="nearestStation" name="nearestStation" placeholder="例：JR山手線 渋谷駅" maxlength="50" required>
+          <p class="hint">お仕事のご紹介と交通費の計算に使います。</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>働き方の希望</h2>
+        <div class="field">
+          <label for="occupation">現在のご職業<span class="req">必須</span></label>
+          <select id="occupation" name="occupation" data-options="occupation" required>
+            <option value="">選択してください</option>
+          </select>
+        </div>
+        <div class="field" data-field="weekdays">
+          <div class="label">勤務できる曜日<span class="req">必須</span></div>
+          <div class="choices" data-options="weekdays" data-name="weekdays" data-required></div>
+        </div>
+        <div class="field" data-field="timeSlots">
+          <div class="label">勤務できる時間帯<span class="req">必須</span></div>
+          <div class="choices" data-options="timeSlots" data-name="timeSlots" data-required></div>
+        </div>
+        <div class="field" data-field="areas">
+          <div class="label">勤務を希望するエリア<span class="req">必須</span></div>
+          <div class="choices" data-options="areas" data-name="areas" data-required></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>経験・スキル</h2>
+        <div class="field" data-field="experiences">
+          <div class="label">経験のある業務<span class="req">必須</span></div>
+          <div class="choices" data-options="experiences" data-name="experiences" data-required></div>
+          <p class="hint">未経験の方は「イベント経験なし」を選んでください。</p>
+        </div>
+        <div class="field" data-field="licenses">
+          <div class="label">資格・免許<span class="opt">任意</span></div>
+          <div class="choices" data-options="licenses" data-name="licenses"></div>
+        </div>
+        <div class="field" data-field="languages">
+          <div class="label">日常会話ができる外国語<span class="opt">任意</span></div>
+          <div class="choices" data-options="languages" data-name="languages"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>ユニフォーム・身だしなみ</h2>
+        <div class="row">
+          <div class="field">
+            <label for="height">身長(cm)<span class="req">必須</span></label>
+            <input type="number" id="height" name="height" min="100" max="230" step="1" inputmode="numeric" required>
+          </div>
+          <div class="field">
+            <label for="shoeSize">靴(cm)<span class="req">必須</span></label>
+            <input type="number" id="shoeSize" name="shoeSize" min="18" max="35" step="0.5" inputmode="decimal" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="clothingSize">服のサイズ<span class="req">必須</span></label>
+          <select id="clothingSize" name="clothingSize" data-options="clothingSizes" required>
+            <option value="">選択してください</option>
+          </select>
+        </div>
+        <div class="field" data-field="hairColor">
+          <div class="label">現在の髪色<span class="req">必須</span></div>
+          <div class="choices" data-options="hairColors" data-name="hairColor" data-type="radio" data-required></div>
+        </div>
+        <div class="field" data-field="tattoo">
+          <div class="label">半袖で見える位置のタトゥー<span class="req">必須</span></div>
+          <div class="choices" data-options="yesNo" data-name="tattoo" data-type="radio" data-required></div>
+          <p class="hint">案件ごとの身だしなみの規定に合わせてお仕事をご紹介するために伺っています。</p>
+        </div>
+        <div class="field">
+          <label for="note">自己PR・ご要望<span class="opt">任意</span></label>
+          <textarea id="note" name="note" maxlength="500" placeholder="例：週末中心に働きたいです。接客のアルバイト経験が2年あります。"></textarea>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>同意事項</h2>
+        <div class="field" data-field="privacyConsent">
+          <label class="consent">
+            <input type="checkbox" name="privacyConsent" data-consent required data-message="同意が必要です">
+            <span><a id="privacy-link" href="#" target="_blank" rel="noopener">個人情報の取り扱い</a>に同意します。ご入力いただいた情報は、お仕事のご紹介・雇用手続き・給与のお支払い・ご連絡のために利用します。</span>
+          </label>
+        </div>
+        <div class="field" data-field="antisocialConsent">
+          <label class="consent">
+            <input type="checkbox" name="antisocialConsent" data-consent required data-message="確認が必要です">
+            <span>自分が反社会的勢力（暴力団・暴力団員など）に該当せず、今後も関わらないことを表明します。</span>
+          </label>
+        </div>
+      </section>
+
+      <button type="submit" class="primary" id="submit-button">登録する</button>
+    </form>
+  </main>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/register.js"></script>
+</body>
+</html>

@@ -1,0 +1,248 @@
+/* 登録フォーム・書類提出フォーム共通の処理 */
+(function () {
+  'use strict';
+
+  var idToken = null;
+
+  function $(sel, root) { return (root || document).querySelector(sel); }
+  function $all(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+
+  function show(id) {
+    $all('[data-screen]').forEach(function (el) { el.hidden = el.id !== id; });
+    window.scrollTo(0, 0);
+  }
+
+  function fatal(message) {
+    $('#error-message').textContent = message;
+    show('screen-error');
+  }
+
+  /** LIFF の初期化。LINE 外のブラウザで開かれた場合はログイン画面へ */
+  function init() {
+    if (!window.liff) return Promise.reject(new Error('LINEアプリから開いてください。'));
+    return liff.init({ liffId: window.APP_CONFIG.LIFF_ID }).then(function () {
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return new Promise(function () {}); // リダイレクト待ち
+      }
+      idToken = liff.getIDToken();
+      if (!idToken) throw new Error('LINEのログイン情報を取得できませんでした。');
+    });
+  }
+
+  /**
+   * Apps Script の API を呼ぶ。Content-Type を付けない（text/plain）ことで
+   * CORS のプリフライトを発生させずに送信できる。
+   */
+  function api(action, data) {
+    return fetch(window.APP_CONFIG.GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: action, idToken: idToken, data: data || {} })
+    }).then(function (res) {
+      if (!res.ok) throw new Error('通信エラーが発生しました（' + res.status + '）');
+      return res.json();
+    });
+  }
+
+  /** data-options="キー" を持つ要素に選択肢を描画する */
+  function renderOptions(root, options) {
+    $all('select[data-options]', root).forEach(function (select) {
+      (options[select.dataset.options] || []).forEach(function (v) {
+        var o = document.createElement('option');
+        o.value = v;
+        o.textContent = v;
+        select.appendChild(o);
+      });
+    });
+    $all('.choices[data-options]', root).forEach(function (box) {
+      var type = box.dataset.type || 'checkbox';
+      (options[box.dataset.options] || []).forEach(function (v) {
+        var label = document.createElement('label');
+        label.className = 'choice';
+        var input = document.createElement('input');
+        input.type = type;
+        input.name = box.dataset.name;
+        input.value = v;
+        if (type === 'radio' && box.dataset.required !== undefined) input.required = true;
+        var span = document.createElement('span');
+        span.textContent = v;
+        label.appendChild(input);
+        label.appendChild(span);
+        box.appendChild(label);
+      });
+    });
+  }
+
+  /** フォームの値をオブジェクトに。チェックボックスは配列、同意欄は true/false */
+  function collect(form) {
+    var data = {};
+    $all('input, select, textarea', form).forEach(function (el) {
+      if (!el.name || el.type === 'file' || el.disabled) return;
+      if (el.type === 'checkbox') {
+        if (el.dataset.consent !== undefined) {
+          data[el.name] = el.checked;
+          return;
+        }
+        if (!data[el.name]) data[el.name] = [];
+        if (el.checked) data[el.name].push(el.value);
+      } else if (el.type === 'radio') {
+        if (el.checked) data[el.name] = el.value;
+      } else {
+        data[el.name] = el.value.trim();
+      }
+    });
+    return data;
+  }
+
+  /** 保存済みの値をフォームに反映（複数選択は「、」区切りで保存されている） */
+  function fill(form, data) {
+    Object.keys(data || {}).forEach(function (name) {
+      var value = data[name] === null || data[name] === undefined ? '' : String(data[name]);
+      $all('[name="' + name + '"]', form).forEach(function (el) {
+        if (el.type === 'checkbox') el.checked = value.split('、').indexOf(el.value) >= 0;
+        else if (el.type === 'radio') el.checked = el.value === value;
+        else el.value = value;
+      });
+    });
+  }
+
+  function clearErrors(form) {
+    $all('.field-error', form).forEach(function (el) { el.remove(); });
+    $all('.has-error', form).forEach(function (el) { el.classList.remove('has-error'); });
+  }
+
+  /** errors: { 項目名: メッセージ } を各項目の下に表示し、最初のエラーへスクロール */
+  function showErrors(form, errors) {
+    clearErrors(form);
+    var first = null;
+    Object.keys(errors).forEach(function (name) {
+      var field = $('[data-field="' + name + '"]', form);
+      if (!field) {
+        var input = $('[name="' + name + '"]', form);
+        field = input && input.closest('.field');
+      }
+      if (!field) return;
+      field.classList.add('has-error');
+      var p = document.createElement('p');
+      p.className = 'field-error';
+      p.textContent = errors[name];
+      field.appendChild(p);
+      if (!first) first = field;
+    });
+    if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    else alert(Object.keys(errors).map(function (k) { return errors[k]; }).join('\n'));
+  }
+
+  /** 必須の複数選択グループ（data-required を付けた .choices）をチェック */
+  function checkRequiredGroups(form) {
+    var errors = {};
+    $all('.choices[data-required]', form).forEach(function (box) {
+      if (box.closest('[hidden]')) return;
+      if (!$all('input:checked', box).length) errors[box.dataset.name] = '選択してください';
+    });
+    return errors;
+  }
+
+  /** 端末の言語に関係なく日本語でエラーを出す */
+  function messageFor(el) {
+    if (el.dataset.message) return el.dataset.message;
+    var v = el.validity;
+    if (v.valueMissing) {
+      if (el.type === 'file') return '画像を選択してください';
+      return el.tagName === 'SELECT' || el.type === 'radio' ? '選択してください' : '入力してください';
+    }
+    if (v.typeMismatch && el.type === 'email') return 'メールアドレスを正しく入力してください';
+    if (v.rangeUnderflow || v.rangeOverflow || v.stepMismatch) return el.min + '〜' + el.max + 'の範囲で入力してください';
+    if (v.badInput) return '正しい値を入力してください';
+    return '入力内容を確認してください';
+  }
+
+  /** 入力し直した項目のエラー表示を消す */
+  document.addEventListener('change', clearFieldError);
+  document.addEventListener('input', clearFieldError);
+  function clearFieldError(e) {
+    var field = e.target.closest && e.target.closest('.has-error');
+    if (!field) return;
+    field.classList.remove('has-error');
+    $all('.field-error', field).forEach(function (el) { el.remove(); });
+  }
+
+  /** ブラウザ標準の入力チェック + グループの必須チェック。エラーがあれば表示して false */
+  function validate(form) {
+    var errors = checkRequiredGroups(form);
+    $all('input, select, textarea', form).forEach(function (el) {
+      if (el.closest('[hidden]') || el.disabled || !el.name) return;
+      if (!el.checkValidity() && !errors[el.name]) errors[el.name] = messageFor(el);
+    });
+    if (Object.keys(errors).length) {
+      showErrors(form, errors);
+      return false;
+    }
+    clearErrors(form);
+    return true;
+  }
+
+  /** 郵便番号から住所を補完（zipcloud / JSONP） */
+  function lookupZip(zip) {
+    return new Promise(function (resolve) {
+      var cb = 'zip_cb_' + Date.now();
+      var script = document.createElement('script');
+      var timer = setTimeout(done, 5000);
+      function done(result) {
+        clearTimeout(timer);
+        delete window[cb];
+        script.remove();
+        resolve(result && result.results ? result.results[0] : null);
+      }
+      window[cb] = done;
+      script.src = 'https://zipcloud.ibsnet.co.jp/api/search?zipcode=' + encodeURIComponent(zip) + '&callback=' + cb;
+      script.onerror = function () { done(null); };
+      document.head.appendChild(script);
+    });
+  }
+
+  /** 画像を長辺 1600px の JPEG に縮小してデータURLにする（送信サイズ削減） */
+  function resizeImage(file, maxSize) {
+    maxSize = maxSize || 1600;
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        var scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error('画像を読み込めませんでした。別の画像を選んでください。'));
+      };
+      img.src = url;
+    });
+  }
+
+  /** 送信ボタンの二重押し防止 */
+  function busy(button, isBusy, label) {
+    button.disabled = isBusy;
+    if (isBusy) {
+      button.dataset.label = button.textContent;
+      button.textContent = label || '送信中…';
+    } else if (button.dataset.label) {
+      button.textContent = button.dataset.label;
+    }
+  }
+
+  function close() {
+    if (window.liff && liff.isInClient()) liff.closeWindow();
+  }
+
+  window.App = {
+    $: $, $all: $all, show: show, fatal: fatal, init: init, api: api,
+    renderOptions: renderOptions, collect: collect, fill: fill,
+    validate: validate, showErrors: showErrors, lookupZip: lookupZip,
+    resizeImage: resizeImage, busy: busy, close: close
+  };
+})();
