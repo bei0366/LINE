@@ -13,11 +13,31 @@ vm.runInContext("getConfig_ = function () { return { liffId: '2011864173-MxilvLo
 
 const answer = (state, text) => ctx.chatAnswer_(state, { text });
 
-test('お名前を答えるとフォームのボタンが届く', () => {
-  const res = answer(ctx.chatNewState_(), '山田　花子');
-  assert.strictEqual(res.state.step, 'form');
-  assert.strictEqual(res.state.data.lastName, '山田');
-  assert.strictEqual(res.state.data.firstName, '花子');
+function run(texts) {
+  let state = ctx.chatNewState_();
+  let res;
+  for (const t of texts) {
+    res = answer(state, t);
+    if (res.cancelled) break;
+    state = res.state;
+  }
+  return { res, state };
+}
+
+test('最初の質問は姓', () => {
+  const m = ctx.chatPrompt_(ctx.chatNewState_());
+  assert.match(m[0].text, /「姓」/);
+});
+
+test('姓→名の順に聞き、答えるとフォームのボタンが届く', () => {
+  let { res, state } = run(['山田']);
+  assert.strictEqual(state.step, 'firstName');
+  assert.match(res.messages[0].text, /「名」/);
+
+  ({ res, state } = run(['山田', '花子']));
+  assert.strictEqual(state.step, 'form');
+  assert.strictEqual(state.data.lastName, '山田');
+  assert.strictEqual(state.data.firstName, '花子');
   const m = res.messages[0];
   assert.strictEqual(m.type, 'template');
   assert.match(m.template.text, /山田 花子 さん/);
@@ -26,25 +46,29 @@ test('お名前を答えるとフォームのボタンが届く', () => {
   assert.ok(m.template.actions[0].label.length <= 20);
 });
 
-test('スペースがない・長すぎる名前は聞き直す', () => {
-  let res = answer(ctx.chatNewState_(), '山田花子');
-  assert.strictEqual(res.state.step, 'name');
-  assert.match(res.messages[0].text, /スペース/);
-  assert.match(res.messages[1].text, /お名前/);
-  res = answer(ctx.chatNewState_(), 'あ'.repeat(21) + ' 花子');
-  assert.strictEqual(res.state.step, 'name');
-  assert.match(res.messages[0].text, /20文字/);
+test('姓の質問にフルネームが送られたら姓と名に分ける', () => {
+  const { state } = run(['山田　花子']);
+  assert.strictEqual(state.step, 'form');
+  assert.strictEqual(state.data.lastName, '山田');
+  assert.strictEqual(state.data.firstName, '花子');
+});
+
+test('空・長すぎる回答は聞き直す', () => {
+  let { res, state } = run(['山田', ' ']);
+  assert.strictEqual(state.step, 'firstName');
+  assert.match(res.messages[0].text, /名を入力してください/);
+  ({ res, state } = run(['あ'.repeat(21)]));
+  assert.strictEqual(state.step, 'lastName');
+  assert.match(res.messages[0].text, /姓を20文字以内/);
 });
 
 test('フォーム入力待ちのときはボタンを送り直す', () => {
-  const state = answer(ctx.chatNewState_(), '山田 花子').state;
-  const res = answer(state, '登録');
-  assert.strictEqual(res.state.step, 'form');
+  const { res, state } = run(['山田', '花子', '登録']);
+  assert.strictEqual(state.step, 'form');
   assert.strictEqual(res.messages[0].type, 'template');
 });
 
 test('「やめる」で中断できる', () => {
-  assert.ok(answer(ctx.chatNewState_(), 'やめる').cancelled);
-  const state = answer(ctx.chatNewState_(), '山田 花子').state;
-  assert.ok(answer(state, 'やめる').cancelled);
+  assert.ok(run(['やめる']).res.cancelled);
+  assert.ok(run(['山田', 'やめる']).res.cancelled);
 });

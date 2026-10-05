@@ -55,7 +55,7 @@ function onUnfollow_(userId) {
 function onText_(ev, userId, text) {
   var chat = loadChat_(userId);
   // お名前を聞いている間は、送られたメッセージを回答として扱う
-  if (chat && chat.step === 'name') return continueChat_(ev, userId, chat, { text: text });
+  if (chat && chatAsking_(chat)) return continueChat_(ev, userId, chat, { text: text });
   // フォームの入力待ち：「やめる」と登録関係のキーワードにだけ反応する（それ以外は担当者が手動で対応）
   if (chat && (text === CHAT_CANCEL || /登録|応募|フォーム|続き/.test(text))) {
     return continueChat_(ev, userId, chat, { text: text });
@@ -85,7 +85,7 @@ function onText_(ev, userId, text) {
 /** スタンプや画像など */
 function onOtherMessage_(ev, userId) {
   var chat = loadChat_(userId);
-  if (!chat || chat.step !== 'name') return;
+  if (!chat || !chatAsking_(chat)) return;
   replyMessage_(ev.replyToken, [textMessage_('文字で回答してください。')].concat(chatPrompt_(chat)));
 }
 
