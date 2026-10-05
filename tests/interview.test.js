@@ -14,22 +14,19 @@ const at = (y, mo, d, h, mi) => new Date(y, mo - 1, d, h, mi || 0);
 const rec = (o) => Object.assign({ userId: 'U1', lastName: '山田', firstName: '花子' }, o);
 const actions = (r, now) => Array.from(ctx.scheduledActions_(rec(r), now));
 
-test('書類落選：10時前に変更→当日10時、10時以降に変更→翌日10時に通知', () => {
-  const before = { status: S.DOC_FAILED, statusChangedAt: '2026/10/05 09:30:00' };
-  assert.deepStrictEqual(actions(before, at(2026, 10, 5, 9, 59)), []);
-  assert.deepStrictEqual(actions(before, at(2026, 10, 5, 10, 0)), ['docReject']);
-
-  const after = { status: S.DOC_FAILED, statusChangedAt: '2026/10/05 15:00:00' };
-  assert.deepStrictEqual(actions(after, at(2026, 10, 5, 23, 0)), []);
-  assert.deepStrictEqual(actions(after, at(2026, 10, 6, 10, 1)), ['docReject']);
-
-  // 送信済みなら送らない
-  assert.deepStrictEqual(actions(Object.assign({ rejectNotifiedAt: '2026/10/06 10:01:00' }, after), at(2026, 10, 6, 11, 0)), []);
+test('書類落選はすぐに通知（送信済みなら送らない）', () => {
+  const r = { status: S.DOC_FAILED, statusChangedAt: '2026/10/05 15:00:00' };
+  assert.deepStrictEqual(actions(r, at(2026, 10, 5, 15, 0)), ['docReject']);
+  assert.deepStrictEqual(actions(Object.assign({ rejectNotifiedAt: '2026/10/05 15:00:01' }, r), at(2026, 10, 5, 15, 1)), []);
 });
 
-test('面接後の不採用も次の10時に通知（文面は丁寧なもの）', () => {
-  const r = { status: S.REJECTED, statusChangedAt: '2026/10/05 18:00:00' };
-  assert.deepStrictEqual(actions(r, at(2026, 10, 6, 10, 0)), ['interviewReject']);
+test('面接後の不採用は、変更した時刻にかかわらず翌日10時に通知（文面は丁寧なもの）', () => {
+  const morning = { status: S.REJECTED, statusChangedAt: '2026/10/05 08:00:00' };
+  assert.deepStrictEqual(actions(morning, at(2026, 10, 5, 10, 0)), []);
+  assert.deepStrictEqual(actions(morning, at(2026, 10, 6, 9, 59)), []);
+  assert.deepStrictEqual(actions(morning, at(2026, 10, 6, 10, 0)), ['interviewReject']);
+  const evening = { status: S.REJECTED, statusChangedAt: '2026/10/05 18:00:00' };
+  assert.deepStrictEqual(actions(evening, at(2026, 10, 6, 10, 0)), ['interviewReject']);
   assert.match(ctx.interviewRejectText_(rec({})), /慎重に選考を重ねました結果/);
   const doc = ctx.docRejectText_(rec({}));
   assert.match(doc, /書類選考の結果、誠に残念ながら、今回は不採用となりました/);
@@ -166,8 +163,8 @@ test('空の行に FALSE が残っていても、新しい登録はデータの�
 });
 
 test('ステータス変更日時がセルで日付形式になっていても通知を送る', () => {
-  const r = { status: S.DOC_FAILED, statusChangedAt: new Date(2026, 9, 5, 15, 0) };
-  assert.deepStrictEqual(actions(r, at(2026, 10, 6, 10, 0)), ['docReject']);
+  const r = { status: S.REJECTED, statusChangedAt: new Date(2026, 9, 5, 15, 0) };
+  assert.deepStrictEqual(actions(r, at(2026, 10, 6, 10, 0)), ['interviewReject']);
   const f = { status: S.INTERVIEW_FIXED, interviewAt: new Date(2026, 9, 12, 14, 0), reminderSentAt: 'x' };
   assert.deepStrictEqual(actions(f, at(2026, 10, 12, 14, 0)), ['call']);
 });

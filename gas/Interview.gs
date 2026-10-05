@@ -4,13 +4,14 @@
  * - 「書類通過」→ 応募者の希望日時から面接候補をボタンで送る（onStatusEdit から）
  * - 応募者がボタンで日時を選ぶ → 「面接確定」＋ LINEコールの使い方を返信（Webhook の postback）
  * - 面接当日の朝9時にリマインド、面接の時刻に「通話する」ボタンを送る（runScheduler：1分ごと）
- * - 「書類落選」「不採用」→ 次の午前10時に不採用通知を送る（runScheduler）
+ * - 「書類落選」→ すぐに不採用通知を送る（onStatusEdit から。送れなかった場合は runScheduler が送り直す）
+ * - 「不採用」（面接後）→ 翌日の午前10時に不採用通知を送る（runScheduler）
  *
  * scheduledActions_ と文面をつくる関数はシートや LINE に触れないので、tests/interview.test.js で確認できる。
  */
 
 var REMINDER_HOUR = 9;          // 面接当日のリマインド
-var REJECT_NOTICE_HOUR = 10;    // 不採用通知
+var REJECT_NOTICE_HOUR = 10;    // 面接後の不採用通知（翌日のこの時刻）
 var CALL_WINDOW_MINUTES = 60;   // 面接時刻を過ぎてもこの時間内なら通話ボタンを送る（停止などで遅れた場合）
 var BRAND_BROWN = '#381E19';
 
@@ -151,11 +152,13 @@ function parseTimestamp_(s) {
   return m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)) : null;
 }
 
-/** ステータスを変えた時刻の「次の午前10時」（10時より前に変えたらその日の10時） */
-function rejectDueAt_(changedAt) {
-  var due = new Date(changedAt.getFullYear(), changedAt.getMonth(), changedAt.getDate(), REJECT_NOTICE_HOUR, 0);
-  if (changedAt >= due) due = addDaysTo_(due, 1);
-  return due;
+/**
+ * 不採用通知を送る時刻。
+ * 書類落選：ステータスを変えたらすぐ／不採用（面接後）：変えた日の翌日の午前10時
+ */
+function rejectDueAt_(changedAt, status) {
+  if (status === STATUS.DOC_FAILED) return changedAt;
+  return new Date(changedAt.getFullYear(), changedAt.getMonth(), changedAt.getDate() + 1, REJECT_NOTICE_HOUR, 0);
 }
 
 /**
@@ -166,7 +169,7 @@ function scheduledActions_(rec, now) {
   var actions = [];
   if ((rec.status === STATUS.DOC_FAILED || rec.status === STATUS.REJECTED) && !rec.rejectNotifiedAt) {
     var changed = parseTimestamp_(rec.statusChangedAt);
-    if (changed && now >= rejectDueAt_(changed)) {
+    if (changed && now >= rejectDueAt_(changed, rec.status)) {
       actions.push(rec.status === STATUS.DOC_FAILED ? 'docReject' : 'interviewReject');
     }
   }
@@ -281,7 +284,7 @@ function pendingNotices_(now) {
     if (!changed) {
       lines.push(label + '「ステータス変更日時」が読み取れないため送れません。ステータスを選び直してください（現在の値：' + (rec.statusChangedAt || '空') + '）');
     } else {
-      var due = rejectDueAt_(changed);
+      var due = rejectDueAt_(changed, rec.status);
       lines.push(label + (now >= due ? 'まもなく送信されます（1分以内）' :
         Utilities.formatDate(due, 'Asia/Tokyo', 'M/d HH:mm') + ' に送信予定'));
     }
