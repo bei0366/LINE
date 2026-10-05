@@ -6,9 +6,8 @@
 /** 登録フォームに再表示してよい項目（本人が入力したもののみ） */
 var REG_EDITABLE_KEYS = [
   'lastName', 'firstName', 'lastNameKana', 'firstNameKana', 'birthDate', 'gender',
-  'phone', 'email', 'postalCode', 'prefecture', 'city', 'building', 'nearestStation',
-  'occupation', 'weekdays', 'timeSlots', 'areas', 'experiences', 'licenses', 'languages',
-  'height', 'clothingSize', 'shoeSize', 'hairColor', 'tattoo', 'note'
+  'phone', 'postalCode', 'prefecture', 'city', 'building', 'nearestStation',
+  'occupation', 'areas', 'note'
 ];
 
 var IMAGE_LABELS = {
@@ -58,29 +57,45 @@ function apiMe_(userId) {
   };
 }
 
-function apiRegister_(userId, data) {
-  var record = validateRegistration(data);
+/**
+ * 登録内容を検証してシートに保存する（チャット・フォーム共通）。
+ * 新規登録なら管理者に通知する。お礼のメッセージは呼び出し元で送る。
+ */
+function saveRegistration_(userId, input, source) {
   var existing = readRecord_(REG_SHEET, userId);
+  var record = validateRegistration(input, new Date(), { interviewOptional: !!existing });
+  // 登録済みの人の内容変更では、面接日時は入力されたときだけ上書きする
+  if (existing && !record.interview1) {
+    delete record.interview1;
+    delete record.interview2;
+  }
   var now = now_();
-
   record.updatedAt = now;
   record.privacyConsentAt = now;
   record.antisocialConsentAt = now;
   if (!existing) {
     record.status = STATUS.PRE;
     record.registeredAt = now;
+    record.source = source;
     var profile = getLineProfile_(userId);
     record.lineName = profile ? profile.displayName : '';
   }
   writeRecord_(REG_SHEET, userId, record);
+  // チャットの途中でフォームから登録した場合なども、回答途中のデータは不要になる
+  deleteRecord_(CHAT_SHEET, userId);
 
   var name = record.lastName + ' ' + record.firstName;
-  if (!existing) {
-    pushMessage_(userId, [textMessage_(name + ' さん\n\nスタッフ登録ありがとうございます！\n' +
-      '内容を確認のうえ、担当者からご連絡します。\n\n登録内容の変更は「変更」と送信してください。')]);
-    notifyAdmin_('新規スタッフ登録', name);
+  if (!existing) notifyAdmin_('新規スタッフ登録', name);
+  return { isNew: !existing, name: name };
+}
+
+function apiRegister_(userId, data) {
+  var result = saveRegistration_(userId, data, 'フォーム');
+  if (result.isNew) {
+    pushMessage_(userId, [textMessage_(result.name + ' さん\n\nスタッフ登録ありがとうございます！\n' +
+      '面接日時を調整のうえ、担当者からこのトークでご連絡します。\n\n登録内容の変更は「変更」と送信してください。')]);
   }
-  return { ok: true, isNew: !existing };
+  return { ok: true, isNew: result.isNew };
 }
 
 function apiOnboarding_(userId, data) {

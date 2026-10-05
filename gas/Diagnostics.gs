@@ -66,7 +66,7 @@ function checkSettings() {
   // 4. シート・トリガー
   try {
     var ss = SpreadsheetApp.openById(props.SPREADSHEET_ID);
-    [REG_SHEET, ONB_SHEET].forEach(function (name) {
+    [REG_SHEET, ONB_SHEET, CHAT_SHEET].forEach(function (name) {
       if (ss.getSheetByName(name)) ok('シート「' + name + '」があります');
       else ng('シート「' + name + '」がありません。setup を実行してください');
     });

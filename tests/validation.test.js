@@ -11,18 +11,16 @@ for (const f of ['Options.gs', 'Validation.gs']) {
 }
 const { validateRegistration, validateOnboarding } = ctx;
 
-const TODAY = new Date(2026, 9, 5); // 2026-10-05
+const TODAY = new Date(2026, 9, 5, 10, 0); // 2026-10-05 10:00
 
 function reg(overrides) {
   return Object.assign({
     lastName: '山田', firstName: '花子', lastNameKana: 'やまだ', firstNameKana: 'ﾊﾅｺ',
     birthDate: '2000-04-01', gender: '女性',
-    phone: '090-1234-5678', email: 'ｈａｎａｋｏ@example.com',
-    postalCode: '150-0043', prefecture: '東京都', city: '渋谷区道玄坂1-2-3', building: '',
-    nearestStation: '渋谷駅', occupation: 'フリーター',
-    weekdays: ['日', '土'], timeSlots: ['日中（9〜17時）'], areas: ['東京23区'],
-    experiences: ['受付・案内'], licenses: [], languages: [],
-    height: '160', clothingSize: 'M', shoeSize: '23.5', hairColor: '黒・暗めの茶', tattoo: 'いいえ',
+    phone: '090-1234-5678',
+    postalCode: '530-0001', prefecture: '大阪府', city: '大阪市北区梅田1-2-3', building: '',
+    nearestStation: '大阪駅', occupation: 'フリーター',
+    areas: ['京都', '大阪'], interview1: '2026-10-12T14:00', interview2: '',
     note: '', privacyConsent: true, antisocialConsent: true
   }, overrides);
 }
@@ -44,7 +42,9 @@ function onb(overrides) {
     nationality: '日本', idType: '運転免許証', idFront: IMG, facePhoto: IMG,
     bankName: '三井住友銀行', branchName: '渋谷支店', accountType: '普通', accountNumber: '12345',
     accountHolder: 'やまだ はなこ', emergencyName: '山田太郎', emergencyRelation: '父',
-    emergencyPhone: '0312345678', otherJob: 'なし', health: '', confidentialityConsent: true
+    emergencyPhone: '0312345678', otherJob: 'なし', health: '', confidentialityConsent: true,
+    height: '160', clothingSize: 'M', shoeSize: '23.5', hairColor: '黒・暗めの茶', tattoo: 'いいえ',
+    licenses: ['フォークリフト'], languages: []
   }, overrides);
 }
 
@@ -53,34 +53,42 @@ test('正常な登録データを整形する', () => {
   assert.strictEqual(r.lastNameKana, 'ヤマダ');
   assert.strictEqual(r.firstNameKana, 'ハナコ');
   assert.strictEqual(r.phone, '09012345678');
-  assert.strictEqual(r.postalCode, '1500043');
-  assert.strictEqual(r.email, 'hanako@example.com');
-  assert.strictEqual(r.weekdays, '土、日'); // 選択肢の順にそろう
-  assert.strictEqual(r.licenses, '');
-  assert.strictEqual(r.height, 160);
-  assert.strictEqual(r.shoeSize, 23.5);
+  assert.strictEqual(r.postalCode, '5300001');
+  assert.strictEqual(r.areas, '大阪、京都'); // 選択肢の順にそろう
+  assert.strictEqual(r.interview1, '2026/10/12(月) 14:00');
+  assert.strictEqual(r.interview2, '');
   assert.strictEqual(r.age, 26);
   assert.strictEqual(r.ageNote, '');
 });
 
 test('必須項目・同意の不足を検出する', () => {
-  const e = errorsOf(() => validateRegistration(reg({ lastName: ' ', weekdays: [], privacyConsent: false }), TODAY));
-  assert.ok(e.lastName && e.weekdays && e.privacyConsent);
+  const e = errorsOf(() => validateRegistration(reg({ lastName: ' ', areas: [], interview1: '', privacyConsent: false }), TODAY));
+  assert.ok(e.lastName && e.areas && e.interview1 && e.privacyConsent);
 });
 
 test('選択肢にない値や不正な形式を拒否する', () => {
   const e = errorsOf(() => validateRegistration(reg({
-    gender: '不明', areas: ['火星'], phone: '12345', lastNameKana: 'Yamada', shoeSize: '23.3'
+    gender: '不明', areas: ['東京'], phone: '12345', lastNameKana: 'Yamada', interview1: '2026-10-01T10:00'
   }), TODAY));
-  assert.ok(e.gender && e.areas && e.phone && e.lastNameKana && e.shoeSize);
+  assert.ok(e.gender && e.areas && e.phone && e.lastNameKana && e.interview1);
 });
 
-test('18歳未満は注意書きを付け、深夜帯を拒否する', () => {
+test('18歳未満は注意書きを付ける', () => {
   const r = validateRegistration(reg({ birthDate: '2009-01-01' }), TODAY);
   assert.strictEqual(r.age, 17);
   assert.match(r.ageNote, /18歳未満/);
-  const e = errorsOf(() => validateRegistration(reg({ birthDate: '2009-01-01', timeSlots: ['深夜（22〜5時）'] }), TODAY));
-  assert.ok(e.timeSlots);
+});
+
+test('登録済みの人の内容変更では面接日時を省略できる', () => {
+  assert.ok(errorsOf(() => validateRegistration(reg({ interview1: '' }), TODAY)).interview1);
+  const r = validateRegistration(reg({ interview1: '' }), TODAY, { interviewOptional: true });
+  assert.strictEqual(r.interview1, '');
+});
+
+test('面接日時は90日以内・シートの形式も読める', () => {
+  assert.ok(errorsOf(() => validateRegistration(reg({ interview1: '2027-03-01T10:00' }), TODAY)).interview1);
+  const r = validateRegistration(reg({ interview1: '2026/10/12(月) 14:00', interview2: '10月13日 9時' }), TODAY);
+  assert.strictEqual(r.interview2, '2026/10/13(火) 09:00');
 });
 
 test('中学校卒業前（15歳到達後最初の3月31日まで）は登録できない', () => {
@@ -99,6 +107,10 @@ test('書類提出：口座番号を7桁にそろえ、名義をカタカナに�
   const { record, images } = validateOnboarding(onb(), TODAY);
   assert.strictEqual(record.accountNumber, '0012345');
   assert.strictEqual(record.accountHolder, 'ヤマダ ハナコ');
+  assert.strictEqual(record.height, 160);
+  assert.strictEqual(record.shoeSize, 23.5);
+  assert.strictEqual(record.licenses, 'フォークリフト');
+  assert.strictEqual(record.languages, '');
   assert.deepStrictEqual(Object.keys(images).sort(), ['facePhoto', 'idFront']);
 });
 

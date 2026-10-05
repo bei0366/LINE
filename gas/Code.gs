@@ -1,12 +1,15 @@
 /**
  * セブンハーツ スタッフ登録ツール（Google Apps Script）
  *
- * - LINE公式アカウントの Webhook（友だち追加・キーワード応答）
- * - LIFF フォームからの登録・書類提出 API
+ * - LINE公式アカウントの Webhook（友だち追加後、トークで質問してスタッフ登録・キーワード応答）
+ * - LIFF フォームからの登録内容の変更・書類提出 API
  * - スプレッドシートでステータスを「採用」にすると書類提出の案内を自動送信
  *
  * 設定値はすべて「プロジェクトの設定 > スクリプト プロパティ」に保存します（README参照）。
  */
+
+/** 個人情報の取り扱いページ（liff/privacy.html）。別のページを使う場合はスクリプト プロパティ PRIVACY_POLICY_URL で上書き */
+var DEFAULT_PRIVACY_POLICY_URL = 'https://bei0366.github.io/LINE/liff/privacy.html';
 
 function getConfig_() {
   var p = PropertiesService.getScriptProperties().getProperties();
@@ -18,7 +21,7 @@ function getConfig_() {
     spreadsheetId: p.SPREADSHEET_ID,
     driveFolderId: p.DRIVE_FOLDER_ID,
     adminEmail: p.ADMIN_EMAIL || '',
-    privacyPolicyUrl: p.PRIVACY_POLICY_URL || ''
+    privacyPolicyUrl: p.PRIVACY_POLICY_URL || DEFAULT_PRIVACY_POLICY_URL
   };
 }
 
@@ -82,6 +85,7 @@ function setup() {
 
   var reg = ensureSheet_(ss, REG_SHEET);
   ensureSheet_(ss, ONB_SHEET);
+  ensureSheet_(ss, CHAT_SHEET);
 
   var statusCol = headerMap_(reg)['ステータス'] + 1;
   var values = Object.keys(STATUS).map(function (k) { return STATUS[k]; });

@@ -6,6 +6,7 @@
 
 var REG_SHEET = 'スタッフ登録';
 var ONB_SHEET = '労務情報';
+var CHAT_SHEET = '登録途中'; // チャットで回答中の人（途中でやめた人もここに残る）
 
 var STATUS = {
   PRE: '仮登録',             // フォーム送信済み。面談・選考待ち
@@ -26,6 +27,7 @@ COLUMNS[REG_SHEET] = [
   ['userId', 'LINEユーザーID'],
   ['status', 'ステータス'],
   ['lineName', 'LINE表示名'],
+  ['source', '登録方法'],
   ['registeredAt', '初回登録日時'],
   ['updatedAt', '最終更新日時'],
   ['lastName', '姓'],
@@ -37,24 +39,15 @@ COLUMNS[REG_SHEET] = [
   ['ageNote', '年齢による制限'],
   ['gender', '性別'],
   ['phone', '電話番号'],
-  ['email', 'メールアドレス'],
   ['postalCode', '郵便番号'],
   ['prefecture', '都道府県'],
   ['city', '市区町村・番地'],
   ['building', '建物名・部屋番号'],
   ['nearestStation', '最寄り駅'],
   ['occupation', '職業区分'],
-  ['weekdays', '勤務可能曜日'],
-  ['timeSlots', '勤務可能時間帯'],
   ['areas', '希望エリア'],
-  ['experiences', '経験業務'],
-  ['licenses', '資格・免許'],
-  ['languages', '語学'],
-  ['height', '身長(cm)'],
-  ['clothingSize', '服のサイズ'],
-  ['shoeSize', '靴のサイズ(cm)'],
-  ['hairColor', '髪色'],
-  ['tattoo', '露出部位のタトゥー'],
+  ['interview1', '希望面接日時（第1希望）'],
+  ['interview2', '希望面接日時（第2希望）'],
   ['note', '自己PR・備考'],
   ['privacyConsentAt', '個人情報同意日時'],
   ['antisocialConsentAt', '反社会的勢力でない旨の表明日時'],
@@ -78,6 +71,13 @@ COLUMNS[ONB_SHEET] = [
   ['idFront', '本人確認書類（表）'],
   ['idBack', '本人確認書類（裏）'],
   ['facePhoto', '顔写真'],
+  ['height', '身長(cm)'],
+  ['clothingSize', '服のサイズ'],
+  ['shoeSize', '靴のサイズ(cm)'],
+  ['hairColor', '髪色'],
+  ['tattoo', '露出部位のタトゥー'],
+  ['licenses', '資格・免許'],
+  ['languages', '語学'],
   ['bankName', '銀行名'],
   ['branchName', '支店名'],
   ['accountType', '口座種別'],
@@ -92,6 +92,14 @@ COLUMNS[ONB_SHEET] = [
   ['confidentialityConsentAt', '守秘義務同意日時'],
   ['verifiedBy', '書類確認者'],
   ['verifiedAt', '書類確認日']
+];
+
+COLUMNS[CHAT_SHEET] = [
+  ['userId', 'LINEユーザーID'],
+  ['question', '回答中の質問'],
+  ['state', '回答内容（システム用）'],
+  ['startedAt', '開始日時'],
+  ['updatedAt', '最終更新日時']
 ];
 
 function spreadsheet_() {
@@ -175,6 +183,18 @@ function writeRecord_(sheetName, userId, fields) {
     });
     if (row < 0) row = sh.getLastRow() + 1;
     sh.getRange(row, 1, 1, width).setValues([values]);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deleteRecord_(sheetName, userId) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sh = sheet_(sheetName);
+    var row = findRow_(sh, headerMap_(sh), userId);
+    if (row > 0) sh.deleteRow(row);
   } finally {
     lock.releaseLock();
   }

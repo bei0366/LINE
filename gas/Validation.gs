@@ -11,7 +11,7 @@ function ValidationError(errors) {
 ValidationError.prototype = Object.create(Error.prototype);
 
 var LIST_SEPARATOR = '、';
-var NIGHT_SLOT = '深夜（22〜5時）';
+var INTERVIEW_MAX_DAYS = 90;
 var MY_NUMBER_CARD = 'マイナンバーカード（表面のみ）';
 
 /** 全角英数字・記号を半角に */
@@ -33,6 +33,40 @@ function formatDate_(d) {
 }
 
 function startOfDay_(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+
+function addDaysTo_(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+
+var WEEKDAYS_JA = ['日', '月', '火', '水', '木', '金', '土'];
+
+/** 2026/10/12(月) 14:00 */
+function formatDateTime_(d) {
+  return d.getFullYear() + '/' + pad2_(d.getMonth() + 1) + '/' + pad2_(d.getDate()) +
+    '(' + WEEKDAYS_JA[d.getDay()] + ') ' + pad2_(d.getHours()) + ':' + pad2_(d.getMinutes());
+}
+
+/**
+ * 日時の文字列を Date に。読めなければ null。
+ * 受け付ける形式：2026-10-12T14:00（フォーム・LINEの日時選択）、2026/10/12(月) 14:00（シート）、
+ * 10/12 14:00・10月12日 14時（チャットの手入力。年は today から補う）
+ */
+function parseDateTime_(s, today) {
+  s = toHalfWidth_(String(s || '')).trim();
+  var y, mo, d, h, mi;
+  var m = /^(\d{4})[\/\-年](\d{1,2})[\/\-月](\d{1,2})日?\s*(?:\([^)]*\))?[\sTt]*(\d{1,2})[:時](\d{2})?分?$/.exec(s);
+  if (m) {
+    y = Number(m[1]); mo = Number(m[2]); d = Number(m[3]); h = Number(m[4]); mi = Number(m[5] || 0);
+  } else {
+    m = /^(\d{1,2})[\/月](\d{1,2})日?\s*(?:\([^)]*\))?\s*(\d{1,2})[:時](\d{2})?分?$/.exec(s);
+    if (!m) return null;
+    mo = Number(m[1]); d = Number(m[2]); h = Number(m[3]); mi = Number(m[4] || 0);
+    y = today.getFullYear();
+    // 年なしの日付が1か月以上前なら来年とみなす（12月に「1/5」と入力した場合など）
+    if (new Date(y, mo - 1, d) < addDaysTo_(startOfDay_(today), -30)) y++;
+  }
+  var dt = new Date(y, mo - 1, d, h, mi);
+  if (dt.getMonth() !== mo - 1 || dt.getDate() !== d || h > 23 || mi > 59) return null;
+  return dt;
+}
 
 function calcAge_(birth, today) {
   var age = today.getFullYear() - birth.getFullYear();
@@ -107,16 +141,9 @@ Validator_.prototype.phone = function (key, opt) {
   return v;
 };
 
-Validator_.prototype.postal = function (key) {
-  var v = this.digits_(key);
+Validator_.prototype.postal = function (key, opt) {
+  var v = this.digits_(key, opt);
   if (v && !/^\d{7}$/.test(v)) this.error(key, '郵便番号は7桁の数字で入力してください');
-  return v;
-};
-
-Validator_.prototype.email = function (key) {
-  var v = this.text(key, { max: 254 });
-  if (v) v = toHalfWidth_(v);
-  if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) this.error(key, 'メールアドレスを正しく入力してください');
   return v;
 };
 
@@ -142,6 +169,26 @@ Validator_.prototype.number = function (key, opt) {
     return '';
   }
   return n;
+};
+
+/** 面接などの希望日時。未来かつ INTERVIEW_MAX_DAYS 日以内 */
+Validator_.prototype.datetime = function (key, opt) {
+  var raw = this.text(key, opt);
+  if (!raw) return '';
+  var d = parseDateTime_(raw, opt.today);
+  if (!d) {
+    this.error(key, '日時を正しく入力してください（例：10/12 14:00）');
+    return '';
+  }
+  if (d <= opt.today) {
+    this.error(key, '今より後の日時を選んでください');
+    return '';
+  }
+  if (d > new Date(opt.today.getTime() + INTERVIEW_MAX_DAYS * 86400000)) {
+    this.error(key, INTERVIEW_MAX_DAYS + '日以内の日時を選んでください');
+    return '';
+  }
+  return formatDateTime_(d);
 };
 
 Validator_.prototype.oneOf = function (key, list, opt) {
@@ -191,11 +238,39 @@ Validator_.prototype.throwIfErrors = function () {
 };
 
 /**
- * スタッフ登録フォーム（友だち追加直後）の検証。
+ * 生年月日の検証（チャットとフォームで共通）。問題があれば v にエラーを入れて null を返す。
+ * @return {{birthDate: string, age: number, ageNote: string}|null}
+ */
+function checkBirth_(v, key, today) {
+  var birth = v.date(key);
+  if (!birth) {
+    if (!v.errors[key]) v.error(key, '入力してください');
+    return null;
+  }
+  var age = calcAge_(birth, today);
+  if (birth > today || age > 100) {
+    v.error(key, '生年月日を正しく入力してください');
+    return null;
+  }
+  if (!hasFinishedCompulsorySchool_(birth, today)) {
+    v.error(key, '中学校卒業前の方はご登録いただけません');
+    return null;
+  }
+  return {
+    birthDate: formatDate_(birth),
+    age: age,
+    ageNote: age < 18 ? '18歳未満：深夜（22〜5時）勤務不可・年齢証明書の備付が必要' : ''
+  };
+}
+
+/**
+ * スタッフ登録（チャット・フォーム共通）の検証。
+ * opts.interviewOptional：登録済みの人の内容変更では希望面接日時を必須にしない
  * @return {Object} シートに書き込む値
  */
-function validateRegistration(input, today) {
+function validateRegistration(input, today, opts) {
   today = today || new Date();
+  opts = opts || {};
   var v = new Validator_(input);
   var r = {};
 
@@ -203,55 +278,30 @@ function validateRegistration(input, today) {
   r.firstName = v.text('firstName', { max: 20 });
   r.lastNameKana = v.kana('lastNameKana', { max: 30 });
   r.firstNameKana = v.kana('firstNameKana', { max: 30 });
-  var birth = v.date('birthDate');
-  if (!birth && !v.errors.birthDate) v.error('birthDate', '入力してください');
+  var birth = checkBirth_(v, 'birthDate', today);
+  if (birth) {
+    r.birthDate = birth.birthDate;
+    r.age = birth.age;
+    r.ageNote = birth.ageNote;
+  }
   r.gender = v.oneOf('gender', OPTIONS.gender);
 
   r.phone = v.phone('phone');
-  r.email = v.email('email');
-  r.postalCode = v.postal('postalCode');
+  r.postalCode = v.postal('postalCode', { optional: true }); // チャットで「郵便番号がわからない」を選んだ場合は空
   r.prefecture = v.oneOf('prefecture', OPTIONS.prefectures);
   r.city = v.text('city', { max: 100 });
   r.building = v.text('building', { max: 100, optional: true });
   r.nearestStation = v.text('nearestStation', { max: 50 });
 
   r.occupation = v.oneOf('occupation', OPTIONS.occupation);
-  r.weekdays = v.manyOf('weekdays', OPTIONS.weekdays);
-  r.timeSlots = v.manyOf('timeSlots', OPTIONS.timeSlots);
   r.areas = v.manyOf('areas', OPTIONS.areas);
 
-  r.experiences = v.manyOf('experiences', OPTIONS.experiences);
-  r.licenses = v.manyOf('licenses', OPTIONS.licenses, { optional: true });
-  r.languages = v.manyOf('languages', OPTIONS.languages, { optional: true });
-
-  r.height = v.number('height', { min: 100, max: 230, step: 1 });
-  r.clothingSize = v.oneOf('clothingSize', OPTIONS.clothingSizes);
-  r.shoeSize = v.number('shoeSize', { min: 18, max: 35, step: 0.5 });
-  r.hairColor = v.oneOf('hairColor', OPTIONS.hairColors);
-  r.tattoo = v.oneOf('tattoo', OPTIONS.yesNo);
+  r.interview1 = v.datetime('interview1', { today: today, optional: opts.interviewOptional });
+  r.interview2 = v.datetime('interview2', { today: today, optional: true });
   r.note = v.text('note', { max: 500, optional: true, multiline: true });
 
   v.consent('privacyConsent');
   v.consent('antisocialConsent');
-
-  if (birth) {
-    var age = calcAge_(birth, today);
-    if (birth > today || age > 100) {
-      v.error('birthDate', '生年月日を正しく入力してください');
-    } else if (!hasFinishedCompulsorySchool_(birth, today)) {
-      v.error('birthDate', '中学校卒業前の方はご登録いただけません');
-    } else {
-      r.birthDate = formatDate_(birth);
-      r.age = age;
-      r.ageNote = '';
-      if (age < 18) {
-        r.ageNote = '18歳未満：深夜（22〜5時）勤務不可・年齢証明書の備付が必要';
-        if (r.timeSlots.split(LIST_SEPARATOR).indexOf(NIGHT_SLOT) >= 0) {
-          v.error('timeSlots', '18歳未満の方は深夜（22〜5時）の勤務はできません');
-        }
-      }
-    }
-  }
 
   v.throwIfErrors();
   return r;
@@ -309,6 +359,14 @@ function validateOnboarding(input, today) {
   }
 
   image('facePhoto');
+
+  r.height = v.number('height', { min: 100, max: 230, step: 1 });
+  r.clothingSize = v.oneOf('clothingSize', OPTIONS.clothingSizes);
+  r.shoeSize = v.number('shoeSize', { min: 18, max: 35, step: 0.5 });
+  r.hairColor = v.oneOf('hairColor', OPTIONS.hairColors);
+  r.tattoo = v.oneOf('tattoo', OPTIONS.yesNo);
+  r.licenses = v.manyOf('licenses', OPTIONS.licenses, { optional: true });
+  r.languages = v.manyOf('languages', OPTIONS.languages, { optional: true });
 
   r.bankName = v.text('bankName', { max: 40 });
   r.branchName = v.text('branchName', { max: 40 });

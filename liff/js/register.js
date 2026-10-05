@@ -1,4 +1,4 @@
-/* スタッフ登録フォーム */
+/* スタッフ登録フォーム（主に登録内容の変更用。新規登録は LINE のトークで行う） */
 (function () {
   'use strict';
 
@@ -12,18 +12,35 @@
       if (!res.ok) throw new Error(res.error);
       App.renderOptions(form, res.options);
       if (res.privacyPolicyUrl) App.$('#privacy-link').href = res.privacyPolicyUrl;
-      else App.$('#privacy-link').removeAttribute('href');
       if (res.registration) {
         isEdit = true;
         App.fill(form, res.registration);
-        updateNightSlot();
+        // 登録時に同意済み
+        App.$all('input[data-consent]', form).forEach(function (el) { el.checked = true; });
         App.$('#edit-notice').hidden = false;
         App.$('#new-notice').hidden = true;
         submit.textContent = '更新する';
       }
+      setupInterview();
       App.show('screen-form');
     })
     .catch(function (err) { App.fatal(err.message); });
+
+  /** 面接の希望日時は新規登録のときだけ聞く（変更時は担当者と調整済みのため） */
+  function setupInterview() {
+    var section = App.$('#interview-section');
+    section.hidden = isEdit;
+    var t = new Date();
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    var day = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+    var min = day(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1)) + 'T00:00';
+    var max = day(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 90)) + 'T23:59';
+    App.$all('input', section).forEach(function (input) {
+      input.disabled = isEdit;
+      input.min = min;
+      input.max = max;
+    });
+  }
 
   // 郵便番号 → 住所の自動入力（未入力の欄だけ埋める）
   App.$('#postalCode').addEventListener('input', function (e) {
@@ -38,28 +55,6 @@
       if (!city.value) city.value = addr.address2 + addr.address3;
     });
   });
-
-  // 18歳未満は深夜帯を選べないことを入力時に知らせる
-  App.$('#birthDate').addEventListener('change', updateNightSlot);
-  form.addEventListener('change', function (e) { if (e.target.name === 'timeSlots') updateNightSlot(); });
-
-  function ageOf(dateStr) {
-    var b = new Date(dateStr + 'T00:00:00');
-    if (isNaN(b)) return null;
-    var t = new Date();
-    var age = t.getFullYear() - b.getFullYear();
-    if (t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) age--;
-    return age;
-  }
-
-  function updateNightSlot() {
-    var age = ageOf(App.$('#birthDate').value);
-    var night = App.$all('input[name="timeSlots"]').filter(function (el) { return /深夜/.test(el.value); })[0];
-    if (!night) return;
-    var minor = age !== null && age < 18;
-    night.disabled = minor;
-    if (minor) night.checked = false;
-  }
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
