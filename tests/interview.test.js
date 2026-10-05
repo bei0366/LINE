@@ -1,0 +1,139 @@
+// 書類選考〜面接の自動送信（gas/Interview.gs）の判定と文面を Node で検証する: npm test
+const test = require('node:test');
+const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+
+const ctx = vm.createContext({});
+for (const f of ['Options.gs', 'Validation.gs', 'Line.gs', 'Sheet.gs', 'Interview.gs']) {
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'gas', f), 'utf8'), ctx, { filename: f });
+}
+const S = ctx.STATUS;
+const at = (y, mo, d, h, mi) => new Date(y, mo - 1, d, h, mi || 0);
+const rec = (o) => Object.assign({ userId: 'U1', lastName: '山田', firstName: '花子' }, o);
+const actions = (r, now) => Array.from(ctx.scheduledActions_(rec(r), now));
+
+test('書類落選：10時前に変更→当日10時、10時以降に変更→翌日10時に通知', () => {
+  const before = { status: S.DOC_FAILED, statusChangedAt: '2026/10/05 09:30:00' };
+  assert.deepStrictEqual(actions(before, at(2026, 10, 5, 9, 59)), []);
+  assert.deepStrictEqual(actions(before, at(2026, 10, 5, 10, 0)), ['docReject']);
+
+  const after = { status: S.DOC_FAILED, statusChangedAt: '2026/10/05 15:00:00' };
+  assert.deepStrictEqual(actions(after, at(2026, 10, 5, 23, 0)), []);
+  assert.deepStrictEqual(actions(after, at(2026, 10, 6, 10, 1)), ['docReject']);
+
+  // 送信済みなら送らない
+  assert.deepStrictEqual(actions(Object.assign({ rejectNotifiedAt: '2026/10/06 10:01:00' }, after), at(2026, 10, 6, 11, 0)), []);
+});
+
+test('面接後の不採用も次の10時に通知（文面は丁寧なもの）', () => {
+  const r = { status: S.REJECTED, statusChangedAt: '2026/10/05 18:00:00' };
+  assert.deepStrictEqual(actions(r, at(2026, 10, 6, 10, 0)), ['interviewReject']);
+  assert.match(ctx.interviewRejectText_(rec({})), /慎重に選考を重ねました結果/);
+  const doc = ctx.docRejectText_(rec({}));
+  assert.match(doc, /書類選考の結果、誠に残念ながら、今回は不採用となりました/);
+  assert.ok(doc.length < 200);
+});
+
+test('面接確定：当日9時にリマインド、時刻になったら通話ボタン', () => {
+  const r = { status: S.INTERVIEW_FIXED, interviewAt: '2026/10/12(月) 14:00' };
+  assert.deepStrictEqual(actions(r, at(2026, 10, 11, 20, 0)), []);
+  assert.deepStrictEqual(actions(r, at(2026, 10, 12, 8, 59)), []);
+  assert.deepStrictEqual(actions(r, at(2026, 10, 12, 9, 0)), ['reminder']);
+  assert.deepStrictEqual(actions(Object.assign({ reminderSentAt: 'x' }, r), at(2026, 10, 12, 13, 59)), []);
+  assert.deepStrictEqual(actions(Object.assign({ reminderSentAt: 'x' }, r), at(2026, 10, 12, 14, 0)), ['call']);
+  assert.deepStrictEqual(actions(Object.assign({ reminderSentAt: 'x', callSentAt: 'x' }, r), at(2026, 10, 12, 14, 1)), []);
+  // 1時間以上過ぎたら送らない（トリガー停止後の再開などで古い案内を送らないため）
+  assert.deepStrictEqual(actions(Object.assign({ reminderSentAt: 'x' }, r), at(2026, 10, 12, 15, 1)), []);
+});
+
+test('管理者が手入力した面接日時（年なし・秒なし）も読める', () => {
+  const r = { status: S.INTERVIEW_FIXED, interviewAt: '2026/10/12 14:00', reminderSentAt: 'x' };
+  assert.deepStrictEqual(actions(r, at(2026, 10, 12, 14, 0)), ['call']);
+});
+
+test('ほかのステータスでは何も送らない', () => {
+  for (const status of [S.PRE, S.DOC_PASSED, S.INTERVIEW_OFFERED, S.RESCHEDULE, S.HIRED]) {
+    assert.deepStrictEqual(actions({ status, interviewAt: '2026/10/12(月) 14:00', statusChangedAt: '2026/10/01 08:00:00' }, at(2026, 10, 12, 14, 0)), [], status);
+  }
+});
+
+test('面接候補：チェックがなければ未来の希望すべて、あればチェックした希望だけ', () => {
+  const base = {
+    interview1: '2026/10/04(日) 10:00', // 過去
+    interview2: '2026/10/12(月) 14:00',
+    interview3: '2026/10/13(火) 10:00',
+    interview4: ''
+  };
+  const now = at(2026, 10, 5, 12, 0);
+  assert.deepStrictEqual(Array.from(ctx.offerSlots_(rec(base), now)), ['2026/10/12(月) 14:00', '2026/10/13(火) 10:00']);
+  assert.deepStrictEqual(Array.from(ctx.offerSlots_(rec(Object.assign({ offer3: true }, base)), now)), ['2026/10/13(火) 10:00']);
+  assert.deepStrictEqual(Array.from(ctx.offerSlots_(rec(Object.assign({ offer2: 'TRUE', offer3: 'FALSE' }, base)), now)), ['2026/10/12(月) 14:00']);
+});
+
+test('面接候補のメッセージ：日時ボタン＋「どれも都合が合わない」', () => {
+  const m = ctx.offerMessage_(rec({}), ['2026/10/12(月) 14:00', '2026/10/13(火) 10:00']);
+  assert.strictEqual(m.type, 'flex');
+  const buttons = m.contents.footer.contents;
+  assert.strictEqual(buttons.length, 3);
+  assert.strictEqual(buttons[0].action.label, '10/12(月) 14:00');
+  assert.strictEqual(decodeURIComponent(buttons[0].action.data.split('t=')[1]), '2026/10/12(月) 14:00');
+  assert.strictEqual(buttons[2].action.data, 'iv=none');
+  buttons.forEach((b) => {
+    assert.ok(b.action.label.length <= 40);
+    assert.ok(b.action.data.length <= 300);
+  });
+});
+
+test('通話の案内：URLがあればボタン、なければトーク画面の通話ボタンを案内', () => {
+  const withUrl = ctx.callMessages_(rec({}), 'https://line.me/R/call/xxx');
+  assert.strictEqual(withUrl[0].template.actions[0].uri, 'https://line.me/R/call/xxx');
+  assert.ok(withUrl[0].template.text.length <= 160);
+  const without = ctx.callMessages_(rec({}), '');
+  assert.match(without[0].text, /通話）ボタン/);
+});
+
+test('通しの流れ：書類通過→候補送信→応募者が選択→面接確定', () => {
+  const db = {};
+  const sent = [];
+  vm.runInContext(`
+    readRecord_ = function (sheet, id) { return __db[id] ? Object.assign({}, __db[id]) : null; };
+    writeRecord_ = function (sheet, id, f) { __db[id] = Object.assign(__db[id] || {}, f); };
+    pushMessage_ = function (id, m) { __sent.push(['push', m]); return {}; };
+    replyMessage_ = function (t, m) { __sent.push(['reply', m]); return {}; };
+    notifyAdmin_ = function () {};
+    now_ = function () { return '2026/10/05 12:00:00'; };
+    Utilities = { formatDate: function () { return '10/5 12:00'; } };
+  `, Object.assign(ctx, { __db: db, __sent: sent }));
+
+  db.U1 = rec({ status: S.DOC_PASSED, interview1: '2099/01/10(土) 14:00', interview2: '2099/01/11(日) 10:00' });
+  ctx.sendInterviewOffer_(db.U1);
+  assert.strictEqual(db.U1.status, S.INTERVIEW_OFFERED);
+  assert.strictEqual(sent[0][1][0].type, 'flex');
+
+  ctx.onInterviewPostback_({ replyToken: 'r' }, 'U1', { iv: 'pick', t: '2099/01/11(日) 10:00' });
+  assert.strictEqual(db.U1.status, S.INTERVIEW_FIXED);
+  assert.strictEqual(db.U1.interviewAt, '2099/01/11(日) 10:00');
+  const reply = sent[1];
+  assert.strictEqual(reply[0], 'reply');
+  assert.match(reply[1][0].text, /面接の日時が決まりました/);
+  assert.match(reply[1][1].text, /LINEコール/);
+
+  // 確定後にもう一度押しても変わらない
+  ctx.onInterviewPostback_({ replyToken: 'r' }, 'U1', { iv: 'pick', t: '2099/01/10(土) 14:00' });
+  assert.strictEqual(db.U1.interviewAt, '2099/01/11(日) 10:00');
+
+  // 「どれも都合が合わない」
+  db.U2 = rec({ userId: 'U2', status: S.INTERVIEW_OFFERED, interview1: '2099/01/10(土) 14:00' });
+  ctx.onInterviewPostback_({ replyToken: 'r' }, 'U2', { iv: 'none' });
+  assert.strictEqual(db.U2.status, S.RESCHEDULE);
+
+  // 希望日時がすべて過ぎていたら送らずに「日程再調整」＋管理メモ
+  db.U3 = rec({ userId: 'U3', status: S.DOC_PASSED, interview1: '2020/01/10(金) 14:00' });
+  const before = sent.length;
+  ctx.sendInterviewOffer_(db.U3);
+  assert.strictEqual(sent.length, before);
+  assert.strictEqual(db.U3.status, S.RESCHEDULE);
+  assert.match(db.U3.adminMemo, /送れる面接候補がありません/);
+});

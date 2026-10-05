@@ -25,6 +25,8 @@ function handleEvent_(ev) {
       return onFollow_(ev, userId);
     case 'unfollow':
       return onUnfollow_(userId);
+    case 'postback':
+      return onPostback_(ev, userId);
     case 'message':
       if (ev.message.type === 'text') return onText_(ev, userId, ev.message.text.trim());
       return onOtherMessage_(ev, userId);
@@ -82,6 +84,16 @@ function onText_(ev, userId, text) {
   }
 }
 
+/** ボタン（面接候補の選択など）が押されたとき */
+function onPostback_(ev, userId) {
+  var params = {};
+  String(ev.postback.data || '').split('&').forEach(function (kv) {
+    var i = kv.indexOf('=');
+    if (i > 0) params[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1));
+  });
+  if (params.iv) onInterviewPostback_(ev, userId, params);
+}
+
 /** スタンプや画像など */
 function onOtherMessage_(ev, userId) {
   var chat = loadChat_(userId);
@@ -109,7 +121,13 @@ function statusText_(rec) {
   var name = rec.lastName + ' ' + rec.firstName + ' さんの登録状況：' + rec.status + '\n\n';
   switch (rec.status) {
     case STATUS.PRE:
-      return name + '面接日時を調整中です。担当者からご連絡しますので、しばらくお待ちください。';
+      return name + '書類選考中です。結果はこのトークでお知らせしますので、しばらくお待ちください。';
+    case STATUS.INTERVIEW_OFFERED:
+      return name + 'お送りした面接候補の中から、ご都合のよい日時をお選びください。';
+    case STATUS.RESCHEDULE:
+      return name + '担当者から面接日程のご相談をさせていただきますので、少々お待ちください。';
+    case STATUS.INTERVIEW_FIXED:
+      return name + '面接日時：' + rec.interviewAt + '\n当日、時間になりましたら「通話する」ボタンをお送りします。';
     case STATUS.HIRED:
     case STATUS.DOC_REQUESTED:
       return name + '書類のご提出をお待ちしています。「書類」と送信すると提出フォームを開けます。';
@@ -118,6 +136,6 @@ function statusText_(rec) {
     case STATUS.ACTIVE:
       return name + 'お仕事のご案内をお待ちください。登録内容の変更は「変更」と送信してください。';
     default:
-      return name + 'ご不明な点はこのトークでお問い合わせください。';
+      return 'ご不明な点はこのトークでお問い合わせください。';
   }
 }

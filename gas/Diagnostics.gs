@@ -74,8 +74,13 @@ function checkSettings() {
     ng('スプレッドシートを開けません（SPREADSHEET_ID を確認してください）：' + err.message);
   }
   var hasTrigger = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'onStatusEdit'; });
-  if (hasTrigger) ok('「採用」時の自動送信トリガーがあります');
-  else ng('「採用」時の自動送信トリガーがありません。setup を実行してください');
+  if (hasTrigger) ok('ステータス変更時の自動送信トリガーがあります');
+  else ng('ステータス変更時の自動送信トリガーがありません。setup を実行してください');
+  var hasScheduler = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'runScheduler'; });
+  if (hasScheduler) ok('リマインド・通話ボタン・不採用通知の自動送信トリガー（1分ごと）があります');
+  else ng('リマインド・通話ボタン・不採用通知の自動送信トリガーがありません。setup を実行してください');
+  if (props.CALL_URL) ok('CALL_URL（LINEコールの通話用URL）は設定済み');
+  else warn('CALL_URL が未設定です。面接の時刻には「トーク画面の通話ボタンから発信してください」という案内を送ります（通話用URLを入れると「通話する」ボタンになります）');
 
   lines.push('');
   lines.push('※ ここで問題がないのに友だち追加で返信が来ない場合は、次を確認してください。');

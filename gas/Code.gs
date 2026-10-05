@@ -21,7 +21,8 @@ function getConfig_() {
     spreadsheetId: p.SPREADSHEET_ID,
     driveFolderId: p.DRIVE_FOLDER_ID,
     adminEmail: p.ADMIN_EMAIL || '',
-    privacyPolicyUrl: p.PRIVACY_POLICY_URL || DEFAULT_PRIVACY_POLICY_URL
+    privacyPolicyUrl: p.PRIVACY_POLICY_URL || DEFAULT_PRIVACY_POLICY_URL,
+    callUrl: (p.CALL_URL || '').trim()
   };
 }
 
@@ -102,18 +103,28 @@ function setup() {
     props.setProperty('WEBHOOK_TOKEN', Utilities.getUuid().replace(/-/g, ''));
   }
 
-  var hasTrigger = ScriptApp.getProjectTriggers().some(function (t) {
-    return t.getHandlerFunction() === 'onStatusEdit';
+  // 「候補に送る（第1〜第4希望）」はチェックボックス
+  var regHeader = headerMap_(reg);
+  INTERVIEW_KEYS.forEach(function (k, i) {
+    var col = regHeader[labelOf_(REG_SHEET, 'offer' + (i + 1))] + 1;
+    reg.getRange(2, col, reg.getMaxRows() - 1, 1).insertCheckboxes();
   });
-  if (!hasTrigger) ScriptApp.newTrigger('onStatusEdit').forSpreadsheet(ss).onEdit().create();
+
+  var handlers = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
+  if (handlers.indexOf('onStatusEdit') < 0) ScriptApp.newTrigger('onStatusEdit').forSpreadsheet(ss).onEdit().create();
+  // リマインド・通話ボタン・不採用通知を時刻どおりに送るため、1分ごとに確認する
+  if (handlers.indexOf('runScheduler') < 0) ScriptApp.newTrigger('runScheduler').timeBased().everyMinutes(1).create();
 
   console.log('セットアップ完了');
   console.log('Webhook URL: <ウェブアプリのURL>?token=' + props.getProperty('WEBHOOK_TOKEN'));
 }
 
 /**
- * インストール型トリガー（setup で登録）。
- * 「スタッフ登録」シートでステータスを「採用」にすると、本人に書類提出の案内を送り「書類依頼済」に変える。
+ * インストール型トリガー（setup で登録）。「スタッフ登録」シートでステータスを変えたときの処理。
+ * - 書類通過 → 面接候補を送って「面接日程調整中」に
+ * - 面接確定（管理者が手入力した場合）→ 確定の連絡と LINEコールの使い方を送る
+ * - 書類落選・不採用 → 変更時刻を記録（通知は runScheduler が次の午前10時に送る）
+ * - 採用 → 書類提出の案内を送って「書類依頼済」に
  */
 function onStatusEdit(e) {
   var sh = e.range.getSheet();
@@ -129,12 +140,27 @@ function onStatusEdit(e) {
 
   rows.forEach(function (values) {
     var rec = rowToRecord_(REG_SHEET, header, values);
-    if (rec.status !== STATUS.HIRED || !rec.userId) return;
-    var sent = pushMessage_(rec.userId, [
-      textMessage_(rec.lastName + ' ' + rec.firstName + ' さん\n\n選考の結果、セブンハーツのスタッフとして採用となりました！\n\n' +
-        'お仕事を始めていただくために、下のボタンから書類をご提出ください。'),
-      onboardingButton_()
-    ]);
-    if (sent) setStatus_(rec.userId, STATUS.DOC_REQUESTED);
+    if (!rec.userId) return;
+    try {
+      writeRecord_(REG_SHEET, rec.userId, { statusChangedAt: now_(), rejectNotifiedAt: '', updatedAt: now_() });
+      switch (rec.status) {
+        case STATUS.DOC_PASSED:
+          sendInterviewOffer_(rec);
+          break;
+        case STATUS.INTERVIEW_FIXED:
+          sendInterviewFixedByAdmin_(rec);
+          break;
+        case STATUS.HIRED:
+          var sent = pushMessage_(rec.userId, [
+            textMessage_(fullName_(rec) + ' さん\n\n選考の結果、セブンハーツのスタッフとして採用となりました！\n\n' +
+              'お仕事を始めていただくために、下のボタンから書類をご提出ください。'),
+            onboardingButton_()
+          ]);
+          if (sent) setStatus_(rec.userId, STATUS.DOC_REQUESTED);
+          break;
+      }
+    } catch (err) {
+      console.error('onStatusEdit failed', rec.userId, err && err.stack || err);
+    }
   });
 }
