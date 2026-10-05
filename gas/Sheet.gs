@@ -197,7 +197,10 @@ function writeRecord_(sheetName, userId, fields) {
     Object.keys(fields).forEach(function (key) {
       var label = labelOf_(sheetName, key);
       var i = header[label];
-      if (i === undefined) throw new Error('シート「' + sheetName + '」に列「' + label + '」がありません');
+      if (i === undefined) {
+        console.error('シート「' + sheetName + '」に列「' + label + '」がありません。setup を実行してください');
+        throw new UserError('システムの設定に不備があり、保存できませんでした。お手数ですが、トークで担当者にお知らせください。');
+      }
       values[i] = cellValue_(fields[key]);
     });
     if (row < 0) row = sh.getLastRow() + 1;

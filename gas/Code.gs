@@ -53,8 +53,14 @@ function doPost(e) {
   return json_(handleApi_(body));
 }
 
+/**
+ * コードの版。コードを変えるたびに更新する。
+ * checkSettings がウェブアプリ（デプロイ済み）の版と比べて、デプロイし忘れを見つける。
+ */
+var APP_VERSION = '2026-10-05.1';
+
 function doGet() {
-  return json_({ ok: true, service: 'sevenhearts-staff-registration' });
+  return json_({ ok: true, service: 'sevenhearts-staff-registration', version: APP_VERSION });
 }
 
 /** 新しい登録・書類提出を管理者にメールで知らせる（個人情報は本文に含めない） */

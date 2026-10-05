@@ -67,8 +67,12 @@ function checkSettings() {
   try {
     var ss = SpreadsheetApp.openById(props.SPREADSHEET_ID);
     [REG_SHEET, ONB_SHEET, CHAT_SHEET].forEach(function (name) {
-      if (ss.getSheetByName(name)) ok('シート「' + name + '」があります');
-      else ng('シート「' + name + '」がありません。setup を実行してください');
+      var sh = ss.getSheetByName(name);
+      if (!sh) return ng('シート「' + name + '」がありません。setup を実行してください');
+      var header = headerMap_(sh);
+      var missing = COLUMNS[name].map(function (c) { return c[1]; }).filter(function (l) { return header[l] === undefined; });
+      if (missing.length) ng('シート「' + name + '」に列が足りません（' + missing.join('、') + '）。setup を実行してください');
+      else ok('シート「' + name + '」の列はそろっています');
     });
   } catch (err) {
     ng('スプレッドシートを開けません（SPREADSHEET_ID を確認してください）：' + err.message);
@@ -87,6 +91,17 @@ function checkSettings() {
     ng('CALL_URL の形式が違います（https:// で始まるURLを、前後の空白なしで入れてください）。わからない場合は CALL_URL を削除しても動きます。現在：' + callUrl);
   } else {
     ok('CALL_URL（LINEコールの通話用URL）は設定済み：' + callUrl);
+  }
+
+  // 5. デプロイ済みのウェブアプリが最新のコードか
+  try {
+    var appUrl = (ScriptApp.getService().getUrl() || '').replace(/\/dev$/, '/exec');
+    var deployed = appUrl && JSON.parse(UrlFetchApp.fetch(appUrl, { muteHttpExceptions: true }).getContentText()).version;
+    if (deployed === APP_VERSION) ok('ウェブアプリは最新の版でデプロイされています（' + APP_VERSION + '）');
+    else ng('ウェブアプリが古い版のままです（デプロイ済み：' + (deployed || '不明') + '／最新：' + APP_VERSION + '）。' +
+      '「デプロイ > デプロイを管理 > 鉛筆アイコン > バージョン：新バージョン > デプロイ」を行ってください');
+  } catch (err) {
+    warn('ウェブアプリの版を確認できませんでした。コードを変えたあとは「デプロイを管理」から新バージョンでデプロイしてください');
   }
 
   lines.push('');

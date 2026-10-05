@@ -115,13 +115,17 @@
   function showErrors(form, errors) {
     clearErrors(form);
     var first = null;
+    var unknown = [];
     Object.keys(errors).forEach(function (name) {
       var field = $('[data-field="' + name + '"]', form);
       if (!field) {
         var input = $('[name="' + name + '"]', form);
         field = input && input.closest('.field');
       }
-      if (!field) return;
+      if (!field) {
+        unknown.push(name);
+        return;
+      }
       field.classList.add('has-error');
       var p = document.createElement('p');
       p.className = 'field-error';
@@ -129,8 +133,14 @@
       field.appendChild(p);
       if (!first) first = field;
     });
+    // フォームにない項目のエラー＝サーバー（Apps Script）が古い版のまま。応募者には直せないので、その旨を出す
+    if (unknown.length) {
+      alert('送信できませんでした。システムの更新中の可能性があります。\n' +
+        'お手数ですが、時間をおいてお試しいただくか、トークでお知らせください。\n\n' +
+        '（担当者の方へ：Apps Script のデプロイが最新ではありません。対象：' + unknown.join(', ') + '）');
+      return;
+    }
     if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    else alert(Object.keys(errors).map(function (k) { return errors[k]; }).join('\n'));
   }
 
   /** 必須の複数選択グループ（data-required を付けた .choices）をチェック */
