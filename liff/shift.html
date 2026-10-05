@@ -42,10 +42,15 @@
         <p class="hint" style="margin-top:0">出勤できる日をタップして <strong>○</strong> にしてください（もう一度タップで × に戻ります）。</p>
         <div class="bulk">
           <button type="button" class="chip" data-bulk="all">すべて○</button>
-          <button type="button" class="chip" data-bulk="weekend">土日を○</button>
+          <button type="button" class="chip" data-bulk="weekend">土日祝を○</button>
           <button type="button" class="chip" data-bulk="clear">すべて×</button>
         </div>
         <div class="calendar" id="calendar" role="group" aria-label="出勤できる日"></div>
+        <ul class="cal-legend">
+          <li><span class="swatch weekday"></span>平日</li>
+          <li><span class="swatch off"></span>土日祝</li>
+          <li><span class="swatch long"></span>3連休以上</li>
+        </ul>
         <p class="shift-count" id="shift-count" aria-live="polite"></p>
       </section>
 

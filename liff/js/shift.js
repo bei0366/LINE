@@ -39,6 +39,13 @@
   function weekday(d) { return new Date(info.year, info.monthNumber - 1, d).getDay(); }
   function editable(d) { return d >= info.firstEditableDay; }
 
+  /** 'weekday'（平日）/ 'off'（土日祝）/ 'long'（3連休以上）。サーバーが古い版なら土日だけで判定 */
+  function dayInfo(d) {
+    if (info.calendar && info.calendar[d - 1]) return info.calendar[d - 1];
+    var w = weekday(d);
+    return { type: w === 0 || w === 6 ? 'off' : 'weekday', holiday: '' };
+  }
+
   function render() {
     calendar.innerHTML = '';
     WEEKDAYS.forEach(function (w, i) {
@@ -51,14 +58,17 @@
     for (var d = 1; d <= daysInMonth(); d++) {
       var b = document.createElement('button');
       var w = weekday(d);
+      var di = dayInfo(d);
       b.type = 'button';
-      b.className = 'cal-day' + (w === 0 ? ' sun' : w === 6 ? ' sat' : '') + (values[d] === OK ? ' on' : '');
+      b.className = 'cal-day ' + di.type + (values[d] === OK ? ' on' : '');
       b.dataset.day = d;
       b.disabled = !editable(d);
+      if (di.holiday) b.title = di.holiday;
       b.setAttribute('aria-pressed', values[d] === OK ? 'true' : 'false');
-      b.setAttribute('aria-label', info.monthNumber + '月' + d + '日（' + WEEKDAYS[w] + '）' + (values[d] === OK ? '出勤できる' : '出勤できない'));
+      b.setAttribute('aria-label', info.monthNumber + '月' + d + '日（' + WEEKDAYS[w] + (di.holiday ? '・' + di.holiday : '') + '）' +
+        (values[d] === OK ? '出勤できる' : '出勤できない'));
       b.innerHTML = '<span class="num"></span><span class="mark"></span>';
-      b.querySelector('.num').textContent = d;
+      b.querySelector('.num').textContent = d + (di.holiday ? '祝' : '');
       b.querySelector('.mark').textContent = editable(d) || values[d] === OK ? values[d] : '';
       calendar.appendChild(b);
     }
@@ -79,10 +89,9 @@
       var mode = button.dataset.bulk;
       for (var d = 1; d <= daysInMonth(); d++) {
         if (!editable(d)) continue;
-        var w = weekday(d);
         if (mode === 'all') values[d] = OK;
         else if (mode === 'clear') values[d] = NG;
-        else if (w === 0 || w === 6) values[d] = OK;
+        else if (dayInfo(d).type !== 'weekday') values[d] = OK; // 土日祝
       }
       render();
     });

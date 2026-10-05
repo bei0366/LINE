@@ -104,3 +104,46 @@ test('集計：日ごと・エリアごとの出勤可能な人数（複数エ�
   assert.deepStrictEqual(s.notSubmitted.map((x) => x.name), ['鈴木 次郎']);
   assert.strictEqual(s.submitted.length, 3);
 });
+
+const ymd = (d) => ctx.formatDate_(d);
+const holidays = (y) => plain(ctx.holidaysOf_(y));
+
+test('祝日：2026年（振替休日・国民の休日を含む）', () => {
+  assert.deepStrictEqual(holidays(2026), {
+    '2026-01-01': '元日', '2026-01-12': '成人の日', '2026-02-11': '建国記念の日', '2026-02-23': '天皇誕生日',
+    '2026-03-20': '春分の日', '2026-04-29': '昭和の日', '2026-05-03': '憲法記念日', '2026-05-04': 'みどりの日',
+    '2026-05-05': 'こどもの日', '2026-05-06': '振替休日', '2026-07-20': '海の日', '2026-08-11': '山の日',
+    '2026-09-21': '敬老の日', '2026-09-22': '国民の休日', '2026-09-23': '秋分の日', '2026-10-12': 'スポーツの日',
+    '2026-11-03': '文化の日', '2026-11-23': '勤労感謝の日'
+  });
+  const h27 = holidays(2027);
+  assert.strictEqual(h27['2027-03-21'], '春分の日');
+  assert.strictEqual(h27['2027-03-22'], '振替休日'); // 春分の日が日曜
+  assert.strictEqual(h27['2027-09-23'], '秋分の日');
+});
+
+test('カレンダーの色：平日は白、土日祝はオレンジ、3連休以上は赤', () => {
+  const nov = plain(ctx.monthCalendar_(2026, 11));
+  const type = (cal, d) => cal[d - 1].type;
+  assert.strictEqual(nov.length, 30);
+  assert.strictEqual(type(nov, 1), 'off');      // 10/31(土)〜11/1(日) の2連休
+  assert.strictEqual(type(nov, 2), 'weekday');
+  assert.strictEqual(type(nov, 3), 'off');      // 文化の日（火）だけの休み
+  assert.strictEqual(nov[2].holiday, '文化の日');
+  assert.strictEqual(type(nov, 7), 'off');
+  for (const d of [21, 22, 23]) assert.strictEqual(type(nov, d), 'long', '11/' + d); // 土日＋勤労感謝の日
+  assert.strictEqual(type(nov, 24), 'weekday');
+
+  const sep = plain(ctx.monthCalendar_(2026, 9));
+  for (const d of [19, 20, 21, 22, 23]) assert.strictEqual(type(sep, d), 'long', '9/' + d); // シルバーウィーク5連休
+  assert.strictEqual(type(sep, 24), 'weekday');
+
+  // 月をまたぐ連休：2027/1/1(金)〜1/3(日)、2026/5/2(土)〜5/6(水)
+  const jan = plain(ctx.monthCalendar_(2027, 1));
+  for (const d of [1, 2, 3]) assert.strictEqual(type(jan, d), 'long', '1/' + d);
+  const may = plain(ctx.monthCalendar_(2026, 5));
+  for (const d of [2, 3, 4, 5, 6]) assert.strictEqual(type(may, d), 'long', '5/' + d);
+  const apr = plain(ctx.monthCalendar_(2026, 4));
+  assert.strictEqual(type(apr, 29), 'off'); // 昭和の日（水）
+  assert.strictEqual(ymd(new Date(2026, 3, 29)), '2026-04-29');
+});

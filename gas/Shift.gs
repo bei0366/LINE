@@ -17,6 +17,94 @@ var SHIFT_NG = '×';
 var SHIFT_NO_AREA = 'エリア未設定';
 var SHIFT_SUMMARY_PREFIX = 'シフト集計_';
 var SHIFT_DIRTY_KEY = 'SHIFT_SUMMARY_DIRTY'; // 集計を作り直す月（スクリプト プロパティ）
+var LONG_HOLIDAY_DAYS = 3; // 土日祝がこの日数以上続くと「連休」（カレンダーで赤く表示）
+
+// カレンダーの色（フォームは liff/css/style.css、集計シートはここ）
+var DAY_COLORS = { weekday: '#ffffff', off: '#ffe0b2', long: '#f28b82' };
+
+// ---- 祝日・連休 ----
+// 「国民の祝日に関する法律」（2020年以降の内容）から計算する。法律が変わったらここを直す。
+// 春分・秋分の日は、国立天文台の発表と一致する近似式（2099年まで）を使う。
+
+var holidayCache_ = {};
+
+/** その月の第n月曜日（日） */
+function nthMonday_(year, month, n) {
+  var first = new Date(year, month - 1, 1).getDay();
+  return (8 - first) % 7 + 1 + (n - 1) * 7;
+}
+
+/** その年の祝日：{ 'yyyy-MM-dd': 祝日名 } */
+function holidaysOf_(year) {
+  if (holidayCache_[year]) return holidayCache_[year];
+  var h = {};
+  function add(m, d, name) { h[formatDate_(new Date(year, m - 1, d))] = name; }
+  var base = year - 1980;
+  add(1, 1, '元日');
+  add(1, nthMonday_(year, 1, 2), '成人の日');
+  add(2, 11, '建国記念の日');
+  add(2, 23, '天皇誕生日');
+  add(3, Math.floor(20.8431 + 0.242194 * base - Math.floor(base / 4)), '春分の日');
+  add(4, 29, '昭和の日');
+  add(5, 3, '憲法記念日');
+  add(5, 4, 'みどりの日');
+  add(5, 5, 'こどもの日');
+  add(7, nthMonday_(year, 7, 3), '海の日');
+  add(8, 11, '山の日');
+  add(9, nthMonday_(year, 9, 3), '敬老の日');
+  add(9, Math.floor(23.2488 + 0.242194 * base - Math.floor(base / 4)), '秋分の日');
+  add(10, nthMonday_(year, 10, 2), 'スポーツの日');
+  add(11, 3, '文化の日');
+  add(11, 23, '勤労感謝の日');
+
+  var dates = Object.keys(h).sort().map(function (k) {
+    var p = k.split('-');
+    return new Date(+p[0], p[1] - 1, +p[2]);
+  });
+  // 国民の休日：祝日にはさまれた日
+  dates.forEach(function (d) {
+    var mid = addDaysTo_(d, 1);
+    if (h[formatDate_(addDaysTo_(d, 2))] && !h[formatDate_(mid)] && mid.getDay() !== 0) h[formatDate_(mid)] = '国民の休日';
+  });
+  // 振替休日：祝日が日曜日なら、その後の最初の祝日でない日
+  dates.forEach(function (d) {
+    if (d.getDay() !== 0) return;
+    var next = addDaysTo_(d, 1);
+    while (h[formatDate_(next)]) next = addDaysTo_(next, 1);
+    h[formatDate_(next)] = '振替休日';
+  });
+  holidayCache_[year] = h;
+  return h;
+}
+
+/** 祝日名（祝日でなければ ''） */
+function holidayName_(d) {
+  return holidaysOf_(d.getFullYear())[formatDate_(d)] || '';
+}
+
+function isOffDay_(d) {
+  return d.getDay() === 0 || d.getDay() === 6 || !!holidayName_(d);
+}
+
+/**
+ * その月の各日の種類。月をまたぐ連休（10/31〜11/2 など）も数える。
+ * @return [{ day, weekday, holiday: 祝日名, type: 'weekday' | 'off'（土日祝） | 'long'（3連休以上） }]
+ */
+function monthCalendar_(year, month) {
+  var days = [];
+  for (var day = 1; day <= daysInMonth_(year, month); day++) {
+    var d = new Date(year, month - 1, day);
+    var type = 'weekday';
+    if (isOffDay_(d)) {
+      var run = 1;
+      for (var p = addDaysTo_(d, -1); isOffDay_(p); p = addDaysTo_(p, -1)) run++;
+      for (var n = addDaysTo_(d, 1); isOffDay_(n); n = addDaysTo_(n, 1)) run++;
+      type = run >= LONG_HOLIDAY_DAYS ? 'long' : 'off';
+    }
+    days.push({ day: day, weekday: d.getDay(), holiday: holidayName_(d), type: type });
+  }
+  return days;
+}
 
 // ---- 月の計算 ----
 
@@ -142,6 +230,7 @@ function shiftSummary_(staff, shifts, key, areaOrder) {
     });
   });
 
+  var calendar = monthCalendar_(ym.year, ym.month);
   var days = [];
   for (var d = 1; d <= last; d++) {
     var names = {};
@@ -153,7 +242,8 @@ function shiftSummary_(staff, shifts, key, areaOrder) {
       all.push(s.name);
       s.areaList.forEach(function (a) { names[a].push(s.name); });
     });
-    days.push({ day: d, weekday: new Date(ym.year, ym.month - 1, d).getDay(), names: names, all: all });
+    var cal = calendar[d - 1];
+    days.push({ day: d, weekday: cal.weekday, holiday: cal.holiday, type: cal.type, names: names, all: all });
   }
 
   return {
@@ -307,7 +397,7 @@ function writeShiftSummary_(key) {
   var notes = [];
   var ym = parseShiftMonth_(key);
   summary.days.forEach(function (d) {
-    rows.push(line([ym.month + '/' + d.day, WEEKDAYS_JA[d.weekday]].concat(
+    rows.push(line([ym.month + '/' + d.day, WEEKDAYS_JA[d.weekday] + (d.holiday ? '・' + d.holiday : '')].concat(
       summary.areas.map(function (a) { return d.names[a].length; }), [d.all.length])));
     notes.push(['', ''].concat(summary.areas.map(function (a) { return d.names[a].join('\n'); }), [d.all.join('\n')]));
   });
@@ -325,14 +415,15 @@ function writeShiftSummary_(key) {
   sh.getRange(headerRow + 1, 1, 1, width).setFontWeight('bold').setBackground('#f3e5f5');
   sh.getRange(headerRow + 2, 1, 1, width).setFontColor('#6f625b').setBackground('#fafafa');
   sh.getRange(headerRow + 1, 3, rows.length - headerRow, width - 2).setHorizontalAlignment('center');
-  summary.days.forEach(function (d, i) {
-    var bg = d.weekday === 0 ? '#fdecea' : d.weekday === 6 ? '#e8f0fe' : null;
-    if (bg) sh.getRange(firstDayRow + 1 + i, 1, 1, width).setBackground(bg);
-  });
+  // 平日は白、土日祝は薄いオレンジ、3連休以上は赤（フォームのカレンダーと同じ色）
+  sh.getRange(firstDayRow + 1, 1, summary.days.length, width).setBackgrounds(summary.days.map(function (d) {
+    return new Array(width).fill(DAY_COLORS[d.type]);
+  }));
   sh.getRange(firstDayRow + 1, width, notes.length, 1).setFontWeight('bold');
   sh.getRange(listRow + 1, 1, 1, width).setFontWeight('bold');
   sh.setFrozenRows(headerRow + 1);
   sh.setColumnWidth(1, 120);
+  sh.setColumnWidth(2, 120);
   return sh;
 }
 
@@ -384,6 +475,7 @@ function apiShiftMe_(userId, data) {
     firstEditableDay: key === shiftMonthKey_(now) ? now.getDate() : 1,
     closedMonth: requested && requested !== key ? shiftMonthLabel_(requested) : '',
     submitted: !!existing,
+    calendar: monthCalendar_(ym.year, ym.month),
     values: values,
     note: existing ? String(existing.note || '').replace(/^'/, '') : ''
   };
