@@ -145,7 +145,9 @@ function offerSlots_(rec, now) {
 
 /** 「yyyy/MM/dd HH:mm:ss」（now_ の形式）を Date に */
 function parseTimestamp_(s) {
-  var m = /^(\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(s || ''));
+  // セルの書式が日付に変わっていると Date で届くため、そのまま使う
+  if (Object.prototype.toString.call(s) === '[object Date]') return isNaN(s.getTime()) ? null : s;
+  var m = /^(\d{4})\/(\d{1,2})\/(\d{1,2}) (\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(String(s || '').trim());
   return m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)) : null;
 }
 
@@ -258,6 +260,68 @@ function onInterviewPostback_(ev, userId, params) {
   });
   replyMessage_(ev.replyToken, [textMessage_(fixedText_(rec, chosen)), textMessage_(callGuideText_())]);
   notifyAdmin_('面接日時の確定（' + chosen + '）', fullName_(rec));
+}
+
+/**
+ * 不採用通知の送信予定（checkSettings とメニューの「送信予定を確認」で表示）。
+ * @return {string[]} 1人1行の説明
+ */
+function pendingNotices_(now) {
+  var sh = sheet_(REG_SHEET);
+  if (sh.getLastRow() < 2) return [];
+  var header = headerMap_(sh);
+  var rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+  var lines = [];
+  rows.forEach(function (values) {
+    var rec = rowToRecord_(REG_SHEET, header, values);
+    if (!rec.userId || rec.rejectNotifiedAt) return;
+    if (rec.status !== STATUS.DOC_FAILED && rec.status !== STATUS.REJECTED) return;
+    var changed = parseTimestamp_(rec.statusChangedAt);
+    var label = fullName_(rec) + '（' + rec.status + '）：';
+    if (!changed) {
+      lines.push(label + '「ステータス変更日時」が読み取れないため送れません。ステータスを選び直してください（現在の値：' + (rec.statusChangedAt || '空') + '）');
+    } else {
+      var due = rejectDueAt_(changed);
+      lines.push(label + (now >= due ? 'まもなく送信されます（1分以内）' :
+        Utilities.formatDate(due, 'Asia/Tokyo', 'M/d HH:mm') + ' に送信予定'));
+    }
+  });
+  return lines;
+}
+
+/** スプレッドシートを開いたときに「セブンハーツ」メニューを出す（シンプルトリガー） */
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('セブンハーツ')
+    .addItem('不採用通知の送信予定を確認', 'showPendingNotices')
+    .addItem('不採用通知を今すぐ送る', 'sendRejectionsNow')
+    .addToUi();
+}
+
+function showPendingNotices() {
+  var lines = pendingNotices_(new Date());
+  SpreadsheetApp.getUi().alert('不採用通知の送信予定',
+    lines.length ? lines.join('\n') : '送信待ちの不採用通知はありません。', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/** 「書類落選」「不採用」で未送信の人に、午前10時を待たずに今すぐ通知を送る */
+function sendRejectionsNow() {
+  var ui = SpreadsheetApp.getUi();
+  var sh = sheet_(REG_SHEET);
+  if (sh.getLastRow() < 2) return ui.alert('送信待ちの不採用通知はありません。');
+  var header = headerMap_(sh);
+  var rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+  var targets = rows.map(function (v) { return rowToRecord_(REG_SHEET, header, v); }).filter(function (rec) {
+    return rec.userId && !rec.rejectNotifiedAt && (rec.status === STATUS.DOC_FAILED || rec.status === STATUS.REJECTED);
+  });
+  if (!targets.length) return ui.alert('送信待ちの不採用通知はありません。');
+  var answer = ui.alert('不採用通知を今すぐ送る',
+    targets.map(fullName_).join('、') + '\n\nの ' + targets.length + ' 人に、今すぐ不採用通知を送ります。よろしいですか？',
+    ui.ButtonSet.OK_CANCEL);
+  if (answer !== ui.Button.OK) return;
+  targets.forEach(function (rec) {
+    runAction_(rec, rec.status === STATUS.DOC_FAILED ? 'docReject' : 'interviewReject', '');
+  });
+  ui.alert('送信しました。「不採用通知の送信日時」列で確認できます。');
 }
 
 /**

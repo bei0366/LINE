@@ -164,3 +164,10 @@ test('空の行に FALSE が残っていても、新しい登録はデータの�
   ctx.clearEmptyRows_(sheet);
   assert.ok(rows.slice(3).every((row) => row.every((v) => v === '')));
 });
+
+test('ステータス変更日時がセルで日付形式になっていても通知を送る', () => {
+  const r = { status: S.DOC_FAILED, statusChangedAt: new Date(2026, 9, 5, 15, 0) };
+  assert.deepStrictEqual(actions(r, at(2026, 10, 6, 10, 0)), ['docReject']);
+  const f = { status: S.INTERVIEW_FIXED, interviewAt: new Date(2026, 9, 12, 14, 0), reminderSentAt: 'x' };
+  assert.deepStrictEqual(actions(f, at(2026, 10, 12, 14, 0)), ['call']);
+});

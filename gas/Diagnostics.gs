@@ -119,6 +119,18 @@ function checkSettings() {
     }
   }
 
+  // 6. 不採用通知の送信予定
+  try {
+    var pending = pendingNotices_(new Date());
+    if (pending.length) {
+      lines.push('');
+      lines.push('【不採用通知の送信予定】');
+      pending.forEach(function (l) { lines.push('・' + l); });
+    }
+  } catch (err) {
+    warn('不採用通知の送信予定を確認できませんでした：' + err.message);
+  }
+
   lines.push('');
   lines.push('※ ここで問題がないのに友だち追加で返信が来ない場合は、次を確認してください。');
   lines.push('・LINE Official Account Manager > 設定 > 応答設定 で「Webhook」がオンになっているか');

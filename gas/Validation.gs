@@ -51,6 +51,8 @@ function formatDateTime_(d) {
  * 10/12 14:00・10月12日 14時（チャットの手入力。年は today から補う）
  */
 function parseDateTime_(s, today) {
+  // セルの書式が日付に変わっていると Date で届くため、そのまま使う
+  if (Object.prototype.toString.call(s) === '[object Date]') return isNaN(s.getTime()) ? null : s;
   s = toHalfWidth_(String(s || '')).trim();
   var y, mo, d, h, mi;
   var m = /^(\d{4})[\/\-年](\d{1,2})[\/\-月](\d{1,2})日?\s*(?:\([^)]*\))?[\sTt]*(\d{1,2})[:時](\d{2})?分?$/.exec(s);
