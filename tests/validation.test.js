@@ -99,6 +99,13 @@ test('普通免許は必須、服装は任意（選択肢外は不可）', () =>
   assert.ok(errorsOf(() => validateRegistration(reg({ clothes: ['ジーンズ'] }), TODAY)).clothes);
 });
 
+test('面接日時は現在時刻の1時間後以降（当日も可）', () => {
+  // TODAY は 10/05 10:00
+  assert.match(errorsOf(() => validateRegistration(reg({ interview1: '2026-10-05T10:30' }), TODAY)).interview1, /1時間後以降/);
+  assert.strictEqual(validateRegistration(reg({ interview1: '2026-10-05T11:00' }), TODAY).interview1, '2026/10/05(月) 11:00');
+  assert.strictEqual(validateRegistration(reg({ interview1: '2026-10-05T22:00' }), TODAY).interview1, '2026/10/05(月) 22:00');
+});
+
 test('面接日時は30分単位', () => {
   assert.match(errorsOf(() => validateRegistration(reg({ interview1: '2026-10-12T14:15' }), TODAY)).interview1, /30分単位/);
   assert.strictEqual(validateRegistration(reg({ interview1: '2026-10-12T14:30' }), TODAY).interview1, '2026/10/12(月) 14:30');

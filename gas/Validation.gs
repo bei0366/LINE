@@ -194,6 +194,10 @@ Validator_.prototype.datetime = function (key, opt) {
     this.error(key, '今より後の日時を選んでください');
     return '';
   }
+  if (opt.minLeadMinutes && d < new Date(opt.today.getTime() + opt.minLeadMinutes * 60000)) {
+    this.error(key, '現在時刻から' + (opt.minLeadMinutes >= 60 ? (opt.minLeadMinutes / 60) + '時間' : opt.minLeadMinutes + '分') + '後以降の日時を選んでください');
+    return '';
+  }
   if (opt.stepMinutes && d.getMinutes() % opt.stepMinutes !== 0) {
     this.error(key, opt.stepMinutes + '分単位で選んでください');
     return '';
@@ -324,7 +328,7 @@ function validateRegistration(input, today, opts) {
   // 面接の希望日時：第1希望は必須、第2〜第4希望は任意。同じ日時の重複は不可
   var seen = {};
   INTERVIEW_KEYS.forEach(function (key, i) {
-    r[key] = v.datetime(key, { today: today, optional: i > 0 || opts.interviewOptional, stepMinutes: 30 });
+    r[key] = v.datetime(key, { today: today, optional: i > 0 || opts.interviewOptional, stepMinutes: 30, minLeadMinutes: 60 });
     if (r[key] && seen[r[key]]) v.error(key, '第' + seen[r[key]] + '希望と同じ日時です。別の日時を選んでください');
     if (r[key]) seen[r[key]] = i + 1;
   });

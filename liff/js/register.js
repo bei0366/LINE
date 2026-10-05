@@ -10,8 +10,9 @@
 
   // 面接の時刻の選択肢（30分刻み）
   var INTERVIEW_FIRST_TIME = '09:00';
-  var INTERVIEW_LAST_TIME = '21:00';
+  var INTERVIEW_LAST_TIME = '22:00';
   var INTERVIEW_MAX_DAYS = 90;
+  var INTERVIEW_MIN_LEAD_MINUTES = 60; // 現在時刻から1時間後以降
   var WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -94,6 +95,7 @@
     try {
       var data = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
       if (data) App.fill(form, data);
+      for (var n = 1; n <= 4; n++) refreshTimes(n); // 過ぎてしまった時刻は選び直してもらう
       updateBirthDays();
       syncSelectsFromHidden();
     } catch (e) { /* 読めなければ何もしない */ }
@@ -156,24 +158,49 @@
 
   // ---- 面接の希望日時（日付・時刻のプルダウン → 送信用の interviewN） ----
 
-  function setupInterviewSelects() {
-    var t = new Date();
+  /** その日に選べる時刻（30分刻み）。今日なら現在時刻から INTERVIEW_MIN_LEAD_MINUTES 後以降だけ */
+  function timesFor(dateValue) {
     var first = INTERVIEW_FIRST_TIME.split(':').map(Number);
     var last = INTERVIEW_LAST_TIME.split(':').map(Number);
+    var start = first[0] * 60 + first[1];
+    var now = new Date();
+    if (dateValue === ymd(now)) {
+      var earliest = now.getHours() * 60 + now.getMinutes() + INTERVIEW_MIN_LEAD_MINUTES;
+      start = Math.max(start, Math.ceil(earliest / 30) * 30);
+    }
+    var list = [];
+    for (var min = start; min <= last[0] * 60 + last[1]; min += 30) {
+      list.push(pad(Math.floor(min / 60)) + ':' + pad(min % 60));
+    }
+    return list;
+  }
+
+  function setupInterviewSelects() {
+    var t = new Date();
     for (var n = 1; n <= 4; n++) {
       var dateSelect = field('interview' + n + 'Date');
-      var timeSelect = field('interview' + n + 'Time');
-      for (var i = 1; i <= INTERVIEW_MAX_DAYS; i++) {
+      // 今日は、1時間後以降の枠が残っているときだけ選べる
+      for (var i = 0; i < INTERVIEW_MAX_DAYS; i++) {
         var d = new Date(t.getFullYear(), t.getMonth(), t.getDate() + i);
-        addOption(dateSelect, ymd(d), (d.getMonth() + 1) + '/' + d.getDate() + '(' + WEEKDAYS[d.getDay()] + ')');
+        if (i === 0 && !timesFor(ymd(d)).length) continue;
+        addOption(dateSelect, ymd(d), (i === 0 ? '今日 ' : '') + (d.getMonth() + 1) + '/' + d.getDate() + '(' + WEEKDAYS[d.getDay()] + ')');
       }
-      for (var min = first[0] * 60 + first[1]; min <= last[0] * 60 + last[1]; min += 30) {
-        var hhmm = pad(Math.floor(min / 60)) + ':' + pad(min % 60);
-        addOption(timeSelect, hhmm, hhmm);
-      }
-      dateSelect.addEventListener('change', syncInterviews);
-      timeSelect.addEventListener('change', syncInterviews);
+      refreshTimes(n);
+      dateSelect.addEventListener('change', (function (k) {
+        return function () { refreshTimes(k); syncInterviews(); };
+      })(n));
+      field('interview' + n + 'Time').addEventListener('change', syncInterviews);
     }
+  }
+
+  /** 選んだ日付に合わせて時刻の選択肢を作り直す（選んでいた時刻が選べなくなったら空に戻す） */
+  function refreshTimes(n) {
+    var timeSelect = field('interview' + n + 'Time');
+    var current = timeSelect.value;
+    var times = timesFor(field('interview' + n + 'Date').value);
+    while (timeSelect.options.length > 1) timeSelect.remove(1);
+    times.forEach(function (hhmm) { addOption(timeSelect, hhmm, hhmm); });
+    timeSelect.value = times.indexOf(current) >= 0 ? current : '';
   }
 
   function syncInterviews() {
@@ -246,6 +273,7 @@
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     if (!ready) return;
+    for (var n = 1; n <= 4; n++) refreshTimes(n); // 入力中に1時間前を過ぎた時刻を外す
     syncBirthDate();
     syncInterviews();
     if (!App.validate(form)) return;
