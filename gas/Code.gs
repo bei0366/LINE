@@ -57,7 +57,7 @@ function doPost(e) {
  * コードの版。コードを変えるたびに更新する。
  * checkSettings がウェブアプリ（デプロイ済み）の版と比べて、デプロイし忘れを見つける。
  */
-var APP_VERSION = '2026-10-05.10';
+var APP_VERSION = '2026-10-05.11';
 
 function doGet() {
   return json_({ ok: true, service: 'sevenhearts-staff-registration', version: APP_VERSION });
@@ -93,6 +93,7 @@ function setup() {
   var reg = ensureSheet_(ss, REG_SHEET);
   ensureSheet_(ss, ONB_SHEET);
   ensureSheet_(ss, CHAT_SHEET);
+  ensureSheet_(ss, LOG_SHEET);
 
   var statusCol = headerMap_(reg)['ステータス'] + 1;
   var values = Object.keys(STATUS).map(function (k) { return STATUS[k]; });
@@ -176,6 +177,7 @@ function onStatusEdit(e) {
       }
     } catch (err) {
       console.error('onStatusEdit failed', rec.userId, err && err.stack || err);
+      logError_('ステータス変更：' + rec.status, rec.userId, err);
     }
   });
 }

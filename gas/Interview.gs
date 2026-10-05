@@ -347,6 +347,7 @@ function runScheduler() {
         runAction_(rec, action, callUrl);
       } catch (err) {
         console.error('scheduler failed', action, rec.userId, err && err.stack || err);
+        logError_('自動送信：' + action, rec.userId, err);
       }
     });
   });

@@ -34,8 +34,12 @@ function handleApi_(body) {
     return { ok: false, error: '不明な操作です' };
   } catch (err) {
     if (err instanceof ValidationError) return { ok: false, errors: err.errors };
-    if (err instanceof UserError) return { ok: false, error: err.message };
+    if (err instanceof UserError) {
+      if (err.code !== 'login') logError_('フォーム：' + body.action, null, err);
+      return { ok: false, error: err.message, code: err.code };
+    }
     console.error('api failed', err && err.stack || err);
+    logError_('フォーム：' + body.action, null, err);
     return { ok: false, error: '処理中にエラーが発生しました。時間をおいて再度お試しください。' };
   }
 }

@@ -35,9 +35,11 @@ function getLineProfile_(userId) {
   return lineRequest_('get', '/profile/' + encodeURIComponent(userId));
 }
 
-function UserError(message) {
+/** 応募者にそのまま見せてよいエラー。code はフォームが自動で対処するための目印（'login' など） */
+function UserError(message, code) {
   this.name = 'UserError';
   this.message = message;
+  this.code = code || '';
 }
 UserError.prototype = Object.create(Error.prototype);
 
@@ -58,7 +60,7 @@ function verifyIdToken_(idToken) {
     muteHttpExceptions: true
   });
   if (res.getResponseCode() !== 200) {
-    throw new UserError('ログインの有効期限が切れました。画面を閉じて、もう一度開き直してください。');
+    throw new UserError('ログインの有効期限が切れました。画面を閉じて、もう一度開き直してください。', 'login');
   }
   var body = JSON.parse(res.getContentText());
   // トークンの有効期限を過ぎて覚えておかないようにする

@@ -119,7 +119,25 @@ function checkSettings() {
     }
   }
 
-  // 6. 不採用通知の送信予定
+  // 6. 最近のエラー
+  try {
+    var logSheet = SpreadsheetApp.openById(props.SPREADSHEET_ID).getSheetByName(LOG_SHEET);
+    if (!logSheet) {
+      warn('シート「' + LOG_SHEET + '」がありません。setup を実行すると、エラーが記録されるようになります');
+    } else if (logSheet.getLastRow() >= 2) {
+      var from = Math.max(2, logSheet.getLastRow() - 9);
+      var logs = logSheet.getRange(from, 1, logSheet.getLastRow() - from + 1, 4).getValues();
+      lines.push('');
+      lines.push('【最近のエラー（新しい順・最大10件）】シート「' + LOG_SHEET + '」で全件を確認できます');
+      logs.reverse().forEach(function (r) { lines.push('・' + r[0] + '｜' + r[1] + '｜' + r[3]); });
+    } else {
+      ok('最近のエラーはありません');
+    }
+  } catch (err) {
+    warn('エラーログを確認できませんでした：' + err.message);
+  }
+
+  // 7. 不採用通知の送信予定
   try {
     var pending = pendingNotices_(new Date());
     if (pending.length) {

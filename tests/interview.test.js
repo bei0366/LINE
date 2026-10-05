@@ -152,7 +152,7 @@ test('空の行に FALSE が残っていても、新しい登録はデータの�
   };
   // 前のテストで差し替えた書き込み処理を、本物（Sheet.gs）に戻してから試す
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'gas', 'Sheet.gs'), 'utf8'), ctx);
-  vm.runInContext('sheet_ = function () { return __sheet; }; LockService = { getScriptLock: function () { return { waitLock: function () {}, releaseLock: function () {} }; } };',
+  vm.runInContext('sheet_ = function () { return __sheet; }; LockService = { getScriptLock: function () { return { tryLock: function () { return true; }, releaseLock: function () {} }; } };',
     Object.assign(ctx, { __sheet: sheet }));
   ctx.writeRecord_(ctx.REG_SHEET, 'U_new', { lastName: '新規' });
   assert.strictEqual(rows[2][0], 'U_new');

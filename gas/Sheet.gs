@@ -7,6 +7,8 @@
 var REG_SHEET = 'スタッフ登録';
 var ONB_SHEET = '労務情報';
 var CHAT_SHEET = '登録途中'; // チャットで回答中の人（途中でやめた人もここに残る）
+var LOG_SHEET = 'エラーログ'; // フォーム・LINE・自動送信で起きたエラー（新しいものが下）
+var LOG_MAX_ROWS = 1000;
 
 var STATUS = {
   PRE: '仮登録',                    // フォーム送信済み。書類選考待ち
@@ -125,6 +127,26 @@ COLUMNS[CHAT_SHEET] = [
 var spreadsheetCache_ = null;
 
 /** 1回の実行の中では、スプレッドシートを開くのは1回だけにする（開く処理は時間がかかる） */
+COLUMNS[LOG_SHEET] = [
+  ['at', '日時'],
+  ['kind', '場所'],
+  ['user', 'LINEユーザーID（末尾8桁）'],
+  ['message', '内容']
+];
+
+/** エラーを「エラーログ」シートに残す（記録に失敗しても元の処理は止めない） */
+function logError_(kind, userId, err) {
+  try {
+    var sh = spreadsheet_().getSheetByName(LOG_SHEET);
+    if (!sh) return;
+    var message = (err && err.message) || String(err);
+    sh.appendRow([now_(), kind, userId ? String(userId).slice(-8) : '', message.slice(0, 500)]);
+    if (sh.getLastRow() > LOG_MAX_ROWS + 100) sh.deleteRows(2, 100);
+  } catch (e) {
+    console.error('logError_ failed', e);
+  }
+}
+
 function spreadsheet_() {
   if (!spreadsheetCache_) spreadsheetCache_ = SpreadsheetApp.openById(getConfig_().spreadsheetId);
   return spreadsheetCache_;
@@ -212,7 +234,8 @@ function cellValue_(v) {
  */
 function writeRecord_(sheetName, userId, fields) {
   var lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  // 同時に書き込みが重なったときは順番を待つ。待ちきれなければ、応募者にやり直してもらう
+  if (!lock.tryLock(30000)) throw new UserError('ただいま混み合っています。少し時間をおいて、もう一度お試しください。');
   try {
     var sh = sheet_(sheetName);
     var header = headerMap_(sh);
@@ -238,7 +261,8 @@ function writeRecord_(sheetName, userId, fields) {
 
 function deleteRecord_(sheetName, userId) {
   var lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  // 同時に書き込みが重なったときは順番を待つ。待ちきれなければ、応募者にやり直してもらう
+  if (!lock.tryLock(30000)) throw new UserError('ただいま混み合っています。少し時間をおいて、もう一度お試しください。');
   try {
     var sh = sheet_(sheetName);
     var row = findRow_(sh, headerMap_(sh), userId);

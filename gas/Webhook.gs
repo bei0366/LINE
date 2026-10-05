@@ -12,6 +12,7 @@ function handleWebhook_(body) {
       handleEvent_(ev);
     } catch (err) {
       console.error('webhook event failed', err && err.stack || err);
+      logError_('LINE：' + ev.type, ev.source && ev.source.userId, err);
     }
   });
 }
