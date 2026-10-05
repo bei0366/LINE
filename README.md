@@ -80,7 +80,7 @@ Googleスプレッドシートに自動で保存するツールです。日雇�
    - 「チャネル基本設定」の **チャネルID** を控える
    - 「LIFF」タブで LIFFアプリを追加
      - サイズ：Full
-     - エンドポイントURL：手順4で公開するURL（例：`https://bei0366.github.io/LINE/liff/`）。手順4のあとで設定してもかまいません
+     - エンドポイントURL：手順4で公開するURL（例：`https://sevenhearts-staff.netlify.app/`）。手順4のあとで設定してもかまいません
      - Scope：`openid` と `profile` にチェック
      - 友だち追加オプション：On（Aggressive）
    - 作成された **LIFF ID** を控える
@@ -127,9 +127,12 @@ Googleスプレッドシートに自動で保存するツールです。日雇�
 ### 4. フォームを公開する
 
 1. `liff/js/config.js` の `LIFF_ID` と `GAS_URL`（手順2-7のウェブアプリURL）を書き換えてコミットする
-2. GitHubリポジトリの「Settings > Pages」で、公開元を `main` ブランチの `/（root）` にする
-   - フォームのURL：`https://bei0366.github.io/LINE/liff/`
-   - 非公開リポジトリでは GitHub Pages に有料プランが必要です。その場合は Cloudflare Pages や Netlify に `liff/` フォルダを置いても動きます
+2. [Netlify](https://app.netlify.com/) に GitHub アカウントでログインし、「Add new site（Add new project）> Import an existing project > GitHub」でこのリポジトリを選ぶ
+   - Branch to deploy：このリポジトリの既定ブランチ
+   - Base directory・Build command：空欄
+   - Publish directory：`liff`
+   - 「Site configuration > Change site name」で名前を変えると、URL が `https://sevenhearts-staff.netlify.app/` のようになります
+   - 非公開リポジトリのまま無料で使え、GitHub に変更をコミットすると自動で反映されます（リポジトリが公開なら GitHub Pages でも可）
 3. このURLを、手順1-2のLIFFの「エンドポイントURL」に設定する
 
 ### 5. 動作確認
