@@ -23,7 +23,7 @@ function reg(overrides) {
     weekdays: ['日', '土'], areas: ['京都', '大阪'],
     driverLicense: 'あり', languages: [],
     height: '160', clothingSize: 'M', shoeSize: '23.5', hairColor: '黒・暗めの茶',
-    clothes: ['チノパン（ベージュ）', '黒スーツ'],
+    clothes: ['チノパン（ベージュ）', '黒スーツ'], referralSource: 'タイミー',
     interview1: '2026-10-12T14:00', interview2: '', interview3: '', interview4: '',
     note: '', privacyConsent: true, antisocialConsent: true
   }, overrides);
@@ -85,6 +85,12 @@ test('18歳未満は注意書きを付ける', () => {
   const r = validateRegistration(reg({ birthDate: '2009-01-01' }), TODAY);
   assert.strictEqual(r.age, 17);
   assert.match(r.ageNote, /18歳未満/);
+});
+
+test('当社を知ったきっかけは必須・選択肢から1つ', () => {
+  assert.strictEqual(validateRegistration(reg(), TODAY).referralSource, 'タイミー');
+  assert.ok(errorsOf(() => validateRegistration(reg({ referralSource: '' }), TODAY)).referralSource);
+  assert.ok(errorsOf(() => validateRegistration(reg({ referralSource: 'バイトル' }), TODAY)).referralSource);
 });
 
 test('普通免許は必須、服装は任意（選択肢外は不可）', () => {

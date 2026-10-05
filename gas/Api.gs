@@ -8,7 +8,7 @@ var REG_EDITABLE_KEYS = [
   'lastName', 'firstName', 'lastNameKana', 'firstNameKana', 'birthDate', 'gender',
   'phone', 'email', 'postalCode', 'prefecture', 'city', 'building', 'nearestStation',
   'occupation', 'weekdays', 'areas', 'driverLicense', 'languages',
-  'height', 'clothingSize', 'shoeSize', 'hairColor', 'clothes', 'note'
+  'height', 'clothingSize', 'shoeSize', 'hairColor', 'clothes', 'note', 'referralSource'
 ];
 
 var IMAGE_LABELS = {

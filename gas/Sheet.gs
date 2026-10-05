@@ -75,6 +75,7 @@ COLUMNS[REG_SHEET] = [
   ['callSentAt', '通話案内の送信日時'],
   ['rejectNotifiedAt', '不採用通知の送信日時'],
   ['note', '自己PR・備考'],
+  ['referralSource', '当社を知ったきっかけ'],
   ['privacyConsentAt', '個人情報同意日時'],
   ['antisocialConsentAt', '反社会的勢力でない旨の表明日時'],
   ['blocked', 'LINEブロック'],

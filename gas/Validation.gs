@@ -323,6 +323,7 @@ function validateRegistration(input, today, opts) {
     if (r[key]) seen[r[key]] = i + 1;
   });
   r.note = v.text('note', { max: 500, optional: true, multiline: true });
+  r.referralSource = v.oneOf('referralSource', OPTIONS.referralSource);
 
   v.consent('privacyConsent');
   v.consent('antisocialConsent');
