@@ -39,7 +39,13 @@
       method: 'POST',
       body: JSON.stringify({ action: action, idToken: idToken, data: data || {} })
     }).then(function (res) {
-      if (!res.ok) throw new Error('通信エラーが発生しました（' + res.status + '）');
+      if (!res.ok) {
+        var err = new Error(res.status === 404
+          ? '現在、受付システムに接続できません。お手数ですが、時間をおいてお試しください。\n（担当者の方へ：ウェブアプリのURLが見つかりません（404）。デプロイを確認してください）'
+          : '通信エラーが発生しました（' + res.status + '）');
+        err.status = res.status;
+        throw err;
+      }
       return res.json();
     });
   }

@@ -39,6 +39,10 @@ header p { margin: 2px 0 0; font-size: 0.8rem; color: var(--muted); }
 
 main { max-width: 640px; margin: 0 auto; padding: 16px 16px 48px; }
 
+.notice.notice-error { background: #fdecea; border-color: #f5c2bd; }
+.notice-error p { margin: 0; white-space: pre-line; }
+.notice-error button.secondary { margin-top: 8px; }
+
 .notice {
   background: #fbf6ec;
   border: 1px solid #e7d7b5;

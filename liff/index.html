@@ -37,6 +37,10 @@
     </div>
 
     <form id="screen-form" data-screen hidden novalidate>
+      <div class="notice notice-error" id="load-error" hidden>
+        <p id="load-error-message"></p>
+        <button type="button" class="secondary" id="retry-button">もう一度読み込む</button>
+      </div>
       <p class="notice" id="edit-notice" hidden>登録済みの内容を表示しています。変更して「更新する」を押してください。</p>
       <p class="notice" id="new-notice">入力は約3分で終わります。<span class="req">必須</span> の項目は必ず入力してください。</p>
 
