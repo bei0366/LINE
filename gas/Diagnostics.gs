@@ -79,8 +79,15 @@ function checkSettings() {
   var hasScheduler = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'runScheduler'; });
   if (hasScheduler) ok('リマインド・通話ボタン・不採用通知の自動送信トリガー（1分ごと）があります');
   else ng('リマインド・通話ボタン・不採用通知の自動送信トリガーがありません。setup を実行してください');
-  if (props.CALL_URL) ok('CALL_URL（LINEコールの通話用URL）は設定済み');
-  else warn('CALL_URL が未設定です。面接の時刻には「トーク画面の通話ボタンから発信してください」という案内を送ります（通話用URLを入れると「通話する」ボタンになります）');
+  var callUrl = (props.CALL_URL || '').trim();
+  if (!callUrl) {
+    warn('CALL_URL は未設定です（このままでも動きます）。面接の時刻には「トーク画面上の📞ボタンから発信してください」という案内を送ります。' +
+      'LINEコールの通話用URLを入れると、案内が「📞 通話する」ボタンになります');
+  } else if (!/^https:\/\/\S+$/.test(callUrl)) {
+    ng('CALL_URL の形式が違います（https:// で始まるURLを、前後の空白なしで入れてください）。わからない場合は CALL_URL を削除しても動きます。現在：' + callUrl);
+  } else {
+    ok('CALL_URL（LINEコールの通話用URL）は設定済み：' + callUrl);
+  }
 
   lines.push('');
   lines.push('※ ここで問題がないのに友だち追加で返信が来ない場合は、次を確認してください。');
