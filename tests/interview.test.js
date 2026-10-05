@@ -137,3 +137,30 @@ test('通しの流れ：書類通過→候補送信→応募者が選択→面�
   assert.strictEqual(db.U3.status, S.RESCHEDULE);
   assert.match(db.U3.adminMemo, /送れる面接候補がありません/);
 });
+
+test('空の行に FALSE が残っていても、新しい登録はデータのすぐ下に追加される', () => {
+  // 「スタッフ登録」シートを模擬：見出し＋1人分＋空の行（候補チェック欄に FALSE）が 1000 行目まで
+  const header = ctx.COLUMNS[ctx.REG_SHEET].map((c) => c[1]);
+  const offerCol = header.indexOf('候補に送る（第1希望）');
+  const rows = [header, header.map((h, i) => (i === 0 ? 'U_existing' : ''))];
+  while (rows.length < 1000) rows.push(header.map((h, i) => (i === offerCol ? false : '')));
+  const sheet = {
+    getLastRow: () => rows.length,
+    getLastColumn: () => header.length,
+    getRange: (r, c, nr, nc) => ({
+      getValues: () => rows.slice(r - 1, r - 1 + nr).map((row) => row.slice(c - 1, c - 1 + nc)),
+      setValues: (vals) => vals.forEach((v, k) => { rows[r - 1 + k] = v.slice(); }),
+      clearContent: () => { for (let k = 0; k < nr; k++) rows[r - 1 + k] = rows[r - 1 + k].map(() => ''); }
+    })
+  };
+  // 前のテストで差し替えた書き込み処理を、本物（Sheet.gs）に戻してから試す
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'gas', 'Sheet.gs'), 'utf8'), ctx);
+  vm.runInContext('sheet_ = function () { return __sheet; }; LockService = { getScriptLock: function () { return { waitLock: function () {}, releaseLock: function () {} }; } };',
+    Object.assign(ctx, { __sheet: sheet }));
+  ctx.writeRecord_(ctx.REG_SHEET, 'U_new', { lastName: '新規' });
+  assert.strictEqual(rows[2][0], 'U_new');
+  assert.strictEqual(rows[2][header.indexOf('姓')], '新規');
+
+  ctx.clearEmptyRows_(sheet);
+  assert.ok(rows.slice(3).every((row) => row.every((v) => v === '')));
+});

@@ -154,6 +154,27 @@ function headerMap_(sh) {
   return map;
 }
 
+/** データが入っている最後の行（LINEユーザーIDの列で判定）。見出しだけなら 1 */
+function lastDataRow_(sh, header) {
+  var last = sh.getLastRow();
+  if (last < 2) return 1;
+  var ids = sh.getRange(2, header['LINEユーザーID'] + 1, last - 1, 1).getValues();
+  for (var i = ids.length - 1; i >= 0; i--) {
+    if (ids[i][0] !== '' && ids[i][0] !== null) return i + 2;
+  }
+  return 1;
+}
+
+/**
+ * 最後のデータより下の行に残っている値（以前のチェックボックスの FALSE など）を消す。
+ * 値が残っているとシートの最終行が下に伸び、確認しづらくなるため。
+ */
+function clearEmptyRows_(sh) {
+  var last = sh.getLastRow();
+  var lastData = lastDataRow_(sh, headerMap_(sh));
+  if (last > lastData) sh.getRange(lastData + 1, 1, last - lastData, sh.getLastColumn()).clearContent();
+}
+
 function findRow_(sh, header, userId) {
   var last = sh.getLastRow();
   if (last < 2) return -1;
@@ -208,7 +229,7 @@ function writeRecord_(sheetName, userId, fields) {
       }
       values[i] = cellValue_(fields[key]);
     });
-    if (row < 0) row = sh.getLastRow() + 1;
+    if (row < 0) row = lastDataRow_(sh, header) + 1;
     sh.getRange(row, 1, 1, width).setValues([values]);
   } finally {
     lock.releaseLock();

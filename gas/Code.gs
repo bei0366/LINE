@@ -57,7 +57,7 @@ function doPost(e) {
  * コードの版。コードを変えるたびに更新する。
  * checkSettings がウェブアプリ（デプロイ済み）の版と比べて、デプロイし忘れを見つける。
  */
-var APP_VERSION = '2026-10-05.3';
+var APP_VERSION = '2026-10-05.4';
 
 function doGet() {
   return json_({ ok: true, service: 'sevenhearts-staff-registration', version: APP_VERSION });
@@ -109,12 +109,16 @@ function setup() {
     props.setProperty('WEBHOOK_TOKEN', Utilities.getUuid().replace(/-/g, ''));
   }
 
-  // 「候補に送る（第1〜第4希望）」はチェックボックス
+  // 「候補に送る（第1〜第4希望）」はチェックボックス。
+  // insertCheckboxes は空の行にも「FALSE」を書き込み、シートの最終行が下に伸びてしまうため、
+  // 入力規則（チェックボックス）だけを付ける（空のセルはチェックなしとして表示される）
   var regHeader = headerMap_(reg);
+  var checkbox = SpreadsheetApp.newDataValidation().requireCheckbox().build();
   INTERVIEW_KEYS.forEach(function (k, i) {
     var col = regHeader[labelOf_(REG_SHEET, 'offer' + (i + 1))] + 1;
-    reg.getRange(2, col, reg.getMaxRows() - 1, 1).insertCheckboxes();
+    reg.getRange(2, col, reg.getMaxRows() - 1, 1).setDataValidation(checkbox);
   });
+  clearEmptyRows_(reg);
 
   var handlers = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
   if (handlers.indexOf('onStatusEdit') < 0) ScriptApp.newTrigger('onStatusEdit').forSpreadsheet(ss).onEdit().create();
