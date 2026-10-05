@@ -94,14 +94,29 @@ function checkSettings() {
   }
 
   // 5. デプロイ済みのウェブアプリが最新のコードか
-  try {
-    var appUrl = (ScriptApp.getService().getUrl() || '').replace(/\/dev$/, '/exec');
-    var deployed = appUrl && JSON.parse(UrlFetchApp.fetch(appUrl, { muteHttpExceptions: true }).getContentText()).version;
-    if (deployed === APP_VERSION) ok('ウェブアプリは最新の版でデプロイされています（' + APP_VERSION + '）');
-    else ng('ウェブアプリが古い版のままです（デプロイ済み：' + (deployed || '不明') + '／最新：' + APP_VERSION + '）。' +
-      '「デプロイ > デプロイを管理 > 鉛筆アイコン > バージョン：新バージョン > デプロイ」を行ってください');
-  } catch (err) {
-    warn('ウェブアプリの版を確認できませんでした。コードを変えたあとは「デプロイを管理」から新バージョンでデプロイしてください');
+  // ScriptApp.getService().getUrl() は環境によって取得できないため、スクリプト プロパティ WEBAPP_URL を優先する
+  var appUrl = (props.WEBAPP_URL || '').trim() || (ScriptApp.getService().getUrl() || '').replace(/\/dev$/, '/exec');
+  if (!appUrl) {
+    warn('ウェブアプリの版を自動で確認するには、スクリプト プロパティ WEBAPP_URL にウェブアプリのURL（/exec で終わるもの）を入れてください');
+  } else {
+    var deployed = null;
+    var reason = '';
+    try {
+      var res = UrlFetchApp.fetch(appUrl, { muteHttpExceptions: true, followRedirects: true });
+      if (res.getResponseCode() !== 200) reason = 'HTTP ' + res.getResponseCode();
+      else deployed = JSON.parse(res.getContentText()).version || 'なし（古い版）';
+    } catch (err) {
+      reason = err.message;
+    }
+    if (deployed === APP_VERSION) {
+      ok('ウェブアプリは最新の版でデプロイされています（' + APP_VERSION + '）');
+    } else if (deployed) {
+      ng('ウェブアプリが古い版のままです（デプロイ済み：' + deployed + '／最新：' + APP_VERSION + '）。' +
+        '「デプロイ > デプロイを管理 > 鉛筆アイコン > バージョン：新バージョン > デプロイ」を行ってください');
+    } else {
+      warn('ウェブアプリの版を確認できませんでした（' + reason + '）。確認したURL：' + appUrl +
+        '。WEBAPP_URL に正しいウェブアプリのURLを入れるか、そのURLをブラウザで開いて "version" を確認してください');
+    }
   }
 
   lines.push('');
