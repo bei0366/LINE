@@ -7,6 +7,7 @@
 var REG_SHEET = 'スタッフ登録';
 var ONB_SHEET = '労務情報';
 var CHAT_SHEET = '登録途中'; // チャットで回答中の人（途中でやめた人もここに残る）
+var SHIFT_SHEET = 'シフト提出'; // 毎月のシフト（出勤できる日）。1人1か月1行
 
 var STATUS = {
   PRE: '仮登録',                    // フォーム送信済み。書類選考待ち
@@ -74,6 +75,7 @@ COLUMNS[REG_SHEET] = [
   ['reminderSentAt', 'リマインド送信日時'],
   ['callSentAt', '通話案内の送信日時'],
   ['rejectNotifiedAt', '不採用通知の送信日時'],
+  ['shiftRequestedMonth', 'シフト提出の案内（送信済みの月）'],
   ['note', '自己PR・備考'],
   ['referralSource', '当社を知ったきっかけ'],
   ['privacyConsentAt', '個人情報同意日時'],
@@ -121,6 +123,19 @@ COLUMNS[CHAT_SHEET] = [
   ['startedAt', '開始日時'],
   ['updatedAt', '最終更新日時']
 ];
+
+// 1〜31日の列には「○」（出勤できる）か「×」（出勤できない）が入る
+COLUMNS[SHIFT_SHEET] = [
+  ['userId', 'LINEユーザーID'],
+  ['month', '対象月'],
+  ['name', '氏名'],
+  ['areas', '希望エリア（提出時）'],
+  ['availableDays', '出勤可能日数'],
+  ['submittedAt', '初回提出日時'],
+  ['updatedAt', '最終更新日時'],
+  ['note', '備考']
+];
+for (var shiftDay_ = 1; shiftDay_ <= 31; shiftDay_++) COLUMNS[SHIFT_SHEET].push(['d' + shiftDay_, shiftDay_ + '日']);
 
 var spreadsheetCache_ = null;
 

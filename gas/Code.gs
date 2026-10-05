@@ -4,6 +4,7 @@
  * - LINE公式アカウントの Webhook（友だち追加後、トークで質問してスタッフ登録・キーワード応答）
  * - LIFF フォームからの登録内容の変更・書類提出 API
  * - スプレッドシートでステータスを「採用」にすると書類提出の案内を自動送信
+ * - 毎月25日に「稼働可」のスタッフへ翌月のシフト提出フォームを送り、勤務エリアごとに集計（Shift.gs）
  *
  * 設定値はすべて「プロジェクトの設定 > スクリプト プロパティ」に保存します（README参照）。
  */
@@ -57,7 +58,7 @@ function doPost(e) {
  * コードの版。コードを変えるたびに更新する。
  * checkSettings がウェブアプリ（デプロイ済み）の版と比べて、デプロイし忘れを見つける。
  */
-var APP_VERSION = '2026-10-05.9';
+var APP_VERSION = '2026-10-05.10';
 
 function doGet() {
   return json_({ ok: true, service: 'sevenhearts-staff-registration', version: APP_VERSION });
@@ -93,6 +94,7 @@ function setup() {
   var reg = ensureSheet_(ss, REG_SHEET);
   ensureSheet_(ss, ONB_SHEET);
   ensureSheet_(ss, CHAT_SHEET);
+  ensureSheet_(ss, SHIFT_SHEET);
 
   var statusCol = headerMap_(reg)['ステータス'] + 1;
   var values = Object.keys(STATUS).map(function (k) { return STATUS[k]; });
@@ -122,7 +124,7 @@ function setup() {
 
   var handlers = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
   if (handlers.indexOf('onStatusEdit') < 0) ScriptApp.newTrigger('onStatusEdit').forSpreadsheet(ss).onEdit().create();
-  // リマインド・通話ボタン・不採用通知を時刻どおりに送るため、1分ごとに確認する
+  // リマインド・通話ボタン・不採用通知・シフト提出の案内を時刻どおりに送るため、1分ごとに確認する
   if (handlers.indexOf('runScheduler') < 0) ScriptApp.newTrigger('runScheduler').timeBased().everyMinutes(1).create();
 
   console.log('セットアップ完了');
