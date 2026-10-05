@@ -55,7 +55,6 @@
         <div class="field">
           <label for="birthDate">生年月日<span class="req">必須</span></label>
           <input type="date" id="birthDate" name="birthDate" autocomplete="bday" required>
-          <p class="hint">18歳未満の方は、深夜（22〜5時）のお仕事には入れません。</p>
         </div>
         <div class="field" data-field="gender">
           <div class="label">性別<span class="req">必須</span></div>
@@ -113,10 +112,6 @@
           <div class="label">勤務できる曜日<span class="req">必須</span></div>
           <div class="choices" data-options="weekdays" data-name="weekdays" data-required></div>
         </div>
-        <div class="field" data-field="timeSlots">
-          <div class="label">勤務できる時間帯<span class="req">必須</span></div>
-          <div class="choices" data-options="timeSlots" data-name="timeSlots" data-required></div>
-        </div>
         <div class="field" data-field="areas">
           <div class="label">勤務を希望するエリア<span class="req">必須</span></div>
           <div class="choices" data-options="areas" data-name="areas" data-required></div>
@@ -125,15 +120,10 @@
       </section>
 
       <section class="card">
-        <h2>経験・スキル</h2>
-        <div class="field" data-field="experiences">
-          <div class="label">経験のある業務<span class="req">必須</span></div>
-          <div class="choices" data-options="experiences" data-name="experiences" data-required></div>
-          <p class="hint">未経験の方は「イベント経験なし」を選んでください。</p>
-        </div>
-        <div class="field" data-field="licenses">
-          <div class="label">資格・免許<span class="opt">任意</span></div>
-          <div class="choices" data-options="licenses" data-name="licenses"></div>
+        <h2>免許・語学</h2>
+        <div class="field" data-field="driverLicense">
+          <div class="label">普通自動車免許<span class="req">必須</span></div>
+          <div class="choices" data-options="driverLicense" data-name="driverLicense" data-type="radio" data-required></div>
         </div>
         <div class="field" data-field="languages">
           <div class="label">日常会話ができる外国語<span class="opt">任意</span></div>
@@ -163,10 +153,10 @@
           <div class="label">現在の髪色<span class="req">必須</span></div>
           <div class="choices" data-options="hairColors" data-name="hairColor" data-type="radio" data-required></div>
         </div>
-        <div class="field" data-field="tattoo">
-          <div class="label">半袖で見える位置のタトゥー<span class="req">必須</span></div>
-          <div class="choices" data-options="yesNo" data-name="tattoo" data-type="radio" data-required></div>
-          <p class="hint">お仕事先ごとの身だしなみの規定に合わせてご案内するために伺っています。</p>
+        <div class="field" data-field="clothes">
+          <div class="label">お持ちの服装<span class="opt">任意</span></div>
+          <div class="choices" data-options="clothes" data-name="clothes"></div>
+          <p class="hint">お持ちのものをすべて選んでください。お仕事によって服装の指定があります。</p>
         </div>
         <div class="field">
           <label for="note">自己PR・ご要望<span class="opt">任意</span></label>

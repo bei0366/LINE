@@ -13,7 +13,6 @@ ValidationError.prototype = Object.create(Error.prototype);
 var LIST_SEPARATOR = '、';
 var INTERVIEW_MAX_DAYS = 90;
 var INTERVIEW_KEYS = ['interview1', 'interview2', 'interview3', 'interview4']; // 第1〜第4希望
-var NIGHT_SLOT = '深夜（22〜5時）';
 var MY_NUMBER_CARD = 'マイナンバーカード（表面のみ）';
 
 /** 全角英数字・記号を半角に */
@@ -305,18 +304,16 @@ function validateRegistration(input, today, opts) {
 
   r.occupation = v.oneOf('occupation', OPTIONS.occupation);
   r.weekdays = v.manyOf('weekdays', OPTIONS.weekdays);
-  r.timeSlots = v.manyOf('timeSlots', OPTIONS.timeSlots);
   r.areas = v.manyOf('areas', OPTIONS.areas);
 
-  r.experiences = v.manyOf('experiences', OPTIONS.experiences);
-  r.licenses = v.manyOf('licenses', OPTIONS.licenses, { optional: true });
+  r.driverLicense = v.oneOf('driverLicense', OPTIONS.driverLicense);
   r.languages = v.manyOf('languages', OPTIONS.languages, { optional: true });
 
   r.height = v.number('height', { min: 100, max: 230, step: 1 });
   r.clothingSize = v.oneOf('clothingSize', OPTIONS.clothingSizes);
   r.shoeSize = v.number('shoeSize', { min: 18, max: 35, step: 0.5 });
   r.hairColor = v.oneOf('hairColor', OPTIONS.hairColors);
-  r.tattoo = v.oneOf('tattoo', OPTIONS.yesNo);
+  r.clothes = v.manyOf('clothes', OPTIONS.clothes, { optional: true });
 
   // 面接の希望日時：第1希望は必須、第2〜第4希望は任意。同じ日時の重複は不可
   var seen = {};
@@ -326,10 +323,6 @@ function validateRegistration(input, today, opts) {
     if (r[key]) seen[r[key]] = i + 1;
   });
   r.note = v.text('note', { max: 500, optional: true, multiline: true });
-
-  if (birth && birth.age < 18 && r.timeSlots.split(LIST_SEPARATOR).indexOf(NIGHT_SLOT) >= 0) {
-    v.error('timeSlots', '18歳未満の方は深夜（22〜5時）の勤務はできません');
-  }
 
   v.consent('privacyConsent');
   v.consent('antisocialConsent');

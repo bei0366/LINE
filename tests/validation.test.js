@@ -20,9 +20,10 @@ function reg(overrides) {
     phone: '090-1234-5678', email: 'ｈａｎａｋｏ@example.com',
     postalCode: '530-0001', prefecture: '大阪府', city: '大阪市北区梅田1-2-3', building: '',
     nearestStation: '大阪駅', occupation: 'フリーター',
-    weekdays: ['日', '土'], timeSlots: ['日中（9〜17時）'], areas: ['京都', '大阪'],
-    experiences: ['受付・案内'], licenses: [], languages: [],
-    height: '160', clothingSize: 'M', shoeSize: '23.5', hairColor: '黒・暗めの茶', tattoo: 'いいえ',
+    weekdays: ['日', '土'], areas: ['京都', '大阪'],
+    driverLicense: 'あり', languages: [],
+    height: '160', clothingSize: 'M', shoeSize: '23.5', hairColor: '黒・暗めの茶',
+    clothes: ['チノパン（ベージュ）', '黒スーツ'],
     interview1: '2026-10-12T14:00', interview2: '', interview3: '', interview4: '',
     note: '', privacyConsent: true, antisocialConsent: true
   }, overrides);
@@ -60,7 +61,8 @@ test('正常な登録データを整形する', () => {
   assert.strictEqual(r.email, 'hanako@example.com');
   assert.strictEqual(r.height, 160);
   assert.strictEqual(r.shoeSize, 23.5);
-  assert.strictEqual(r.licenses, '');
+  assert.strictEqual(r.driverLicense, 'あり');
+  assert.strictEqual(r.clothes, '黒スーツ、チノパン（ベージュ）');
   assert.strictEqual(r.interview1, '2026/10/12(月) 14:00');
   assert.strictEqual(r.interview2, '');
   assert.strictEqual(r.age, 26);
@@ -79,12 +81,16 @@ test('選択肢にない値や不正な形式を拒否する', () => {
   assert.ok(e.gender && e.areas && e.phone && e.lastNameKana && e.interview1);
 });
 
-test('18歳未満は注意書きを付け、深夜帯を拒否する', () => {
+test('18歳未満は注意書きを付ける', () => {
   const r = validateRegistration(reg({ birthDate: '2009-01-01' }), TODAY);
   assert.strictEqual(r.age, 17);
   assert.match(r.ageNote, /18歳未満/);
-  const e = errorsOf(() => validateRegistration(reg({ birthDate: '2009-01-01', timeSlots: ['深夜（22〜5時）'] }), TODAY));
-  assert.ok(e.timeSlots);
+});
+
+test('普通免許は必須、服装は任意（選択肢外は不可）', () => {
+  assert.ok(errorsOf(() => validateRegistration(reg({ driverLicense: '' }), TODAY)).driverLicense);
+  assert.strictEqual(validateRegistration(reg({ clothes: [] }), TODAY).clothes, '');
+  assert.ok(errorsOf(() => validateRegistration(reg({ clothes: ['ジーンズ'] }), TODAY)).clothes);
 });
 
 test('面接は第4希望まで。メールは任意。同じ日時の重複は不可', () => {

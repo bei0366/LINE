@@ -24,7 +24,6 @@
         App.fill(form, res.draft); // トークで答えたお名前
       }
       setupInterview();
-      updateNightSlot();
       App.show('screen-form');
     })
     .catch(function (err) { App.fatal(err.message); });
@@ -43,27 +42,6 @@
       input.min = min;
       input.max = max;
     });
-  }
-
-  // 18歳未満は深夜帯を選べないことを入力時に知らせる
-  App.$('#birthDate').addEventListener('change', updateNightSlot);
-
-  function ageOf(dateStr) {
-    var b = new Date(dateStr + 'T00:00:00');
-    if (isNaN(b)) return null;
-    var t = new Date();
-    var age = t.getFullYear() - b.getFullYear();
-    if (t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) age--;
-    return age;
-  }
-
-  function updateNightSlot() {
-    var age = ageOf(App.$('#birthDate').value);
-    var night = App.$all('input[name="timeSlots"]').filter(function (el) { return /深夜/.test(el.value); })[0];
-    if (!night) return;
-    var minor = age !== null && age < 18;
-    night.disabled = minor;
-    if (minor) night.checked = false;
   }
 
   // 郵便番号 → 住所の自動入力（未入力の欄だけ埋める）
