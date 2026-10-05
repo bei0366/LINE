@@ -5,28 +5,54 @@
   var form = App.$('#screen-form');
   var submit = App.$('#submit-button');
   var isEdit = false;
+  var ready = false;   // LINEログインと登録状況の読み込みが終わったか
+  var touched = false; // 読み込み中に入力が始まったか
 
+  // 選択肢はフォームに同梱（js/options.js）しているので、サーバーの応答を待たずにすぐ表示する
+  App.renderOptions(form, window.FORM_OPTIONS);
+  setupInterview();
+  App.busy(submit, true, '読み込み中…');
+  App.show('screen-form');
+  form.addEventListener('input', function () { touched = true; });
+  form.addEventListener('change', function () { touched = true; });
+
+  // LINEログインと登録状況の取得は裏で行う
   App.init()
     .then(function () { return App.api('me'); })
     .then(function (res) {
       if (!res.ok) throw new Error(res.error);
-      App.renderOptions(form, res.options);
       if (res.privacyPolicyUrl) App.$('#privacy-link').href = res.privacyPolicyUrl;
       if (res.registration) {
         isEdit = true;
-        App.fill(form, res.registration);
+        // 読み込み中にすでに入力を始めていたら、入力済みの欄は上書きしない
+        fill(res.registration, touched);
         // 登録時に同意済み
         App.$all('input[data-consent]', form).forEach(function (el) { el.checked = true; });
         App.$('#edit-notice').hidden = false;
         App.$('#new-notice').hidden = true;
-        submit.textContent = '更新する';
+        setupInterview();
       } else if (res.draft) {
-        App.fill(form, res.draft); // トークで答えたお名前
+        fill(res.draft, true); // トークで答えたお名前（空欄のときだけ入れる）
       }
-      setupInterview();
-      App.show('screen-form');
+      ready = true;
+      App.busy(submit, false);
+      submit.textContent = isEdit ? '更新する' : '登録する';
     })
     .catch(function (err) { App.fatal(err.message); });
+
+  /** onlyEmpty なら、まだ入力されていない欄だけに入れる */
+  function fill(data, onlyEmpty) {
+    if (!onlyEmpty) return App.fill(form, data);
+    var empty = {};
+    Object.keys(data).forEach(function (name) {
+      var els = App.$all('[name="' + name + '"]', form);
+      var filled = els.some(function (el) {
+        return (el.type === 'checkbox' || el.type === 'radio') ? el.checked : el.value !== '';
+      });
+      if (!filled) empty[name] = data[name];
+    });
+    App.fill(form, empty);
+  }
 
   /** 面接の希望日時は新規登録のときだけ聞く（変更時は担当者と調整済みのため） */
   function setupInterview() {
@@ -60,6 +86,7 @@
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
+    if (!ready) return;
     if (!App.validate(form)) return;
     App.busy(submit, true);
     App.api('register', App.collect(form))

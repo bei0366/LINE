@@ -122,8 +122,12 @@ COLUMNS[CHAT_SHEET] = [
   ['updatedAt', '最終更新日時']
 ];
 
+var spreadsheetCache_ = null;
+
+/** 1回の実行の中では、スプレッドシートを開くのは1回だけにする（開く処理は時間がかかる） */
 function spreadsheet_() {
-  return SpreadsheetApp.openById(getConfig_().spreadsheetId);
+  if (!spreadsheetCache_) spreadsheetCache_ = SpreadsheetApp.openById(getConfig_().spreadsheetId);
+  return spreadsheetCache_;
 }
 
 function sheet_(name) {

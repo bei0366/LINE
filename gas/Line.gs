@@ -47,6 +47,11 @@ UserError.prototype = Object.create(Error.prototype);
  */
 function verifyIdToken_(idToken) {
   if (!idToken) throw new UserError('LINEのログイン情報を取得できませんでした。LINEアプリから開き直してください。');
+  // フォームを開いたとき（me）と送信したとき（register）で同じトークンが届くため、確認結果を10分間覚えておく
+  var cache = CacheService.getScriptCache();
+  var key = 'idt:' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, idToken));
+  var cached = cache.get(key);
+  if (cached) return cached;
   var res = UrlFetchApp.fetch('https://api.line.me/oauth2/v2.1/verify', {
     method: 'post',
     payload: { id_token: idToken, client_id: getConfig_().loginChannelId },
@@ -55,7 +60,11 @@ function verifyIdToken_(idToken) {
   if (res.getResponseCode() !== 200) {
     throw new UserError('ログインの有効期限が切れました。画面を閉じて、もう一度開き直してください。');
   }
-  return JSON.parse(res.getContentText()).sub;
+  var body = JSON.parse(res.getContentText());
+  // トークンの有効期限を過ぎて覚えておかないようにする
+  var ttl = Math.min(600, Math.floor(body.exp - Date.now() / 1000));
+  if (ttl > 0) cache.put(key, body.sub, ttl);
+  return body.sub;
 }
 
 function registerUrl_() {
