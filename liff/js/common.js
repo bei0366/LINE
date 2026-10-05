@@ -232,9 +232,9 @@
     });
   }
 
-  /** 画像を長辺 1600px の JPEG に縮小してデータURLにする（送信サイズ削減） */
+  /** 画像を長辺 1280px の JPEG に縮小してデータURLにする（送信サイズ削減。文字が読める大きさは保つ） */
   function resizeImage(file, maxSize) {
-    maxSize = maxSize || 1600;
+    maxSize = maxSize || 1280;
     return new Promise(function (resolve, reject) {
       var url = URL.createObjectURL(file);
       var img = new Image();
@@ -245,7 +245,7 @@
         canvas.height = Math.round(img.height * scale);
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
       };
       img.onerror = function () {
         URL.revokeObjectURL(url);

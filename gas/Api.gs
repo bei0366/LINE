@@ -28,6 +28,7 @@ function handleApi_(body) {
     switch (body.action) {
       case 'me': return apiMe_(userId);
       case 'register': return apiRegister_(userId, data);
+      case 'uploadImage': return apiUploadImage_(userId, data);
       case 'onboarding': return apiOnboarding_(userId, data);
     }
     return { ok: false, error: '不明な操作です' };
@@ -123,12 +124,47 @@ function apiRegister_(userId, data) {
   return { ok: true, isNew: result.isNew };
 }
 
-function apiOnboarding_(userId, data) {
+function onboardingRecord_(userId) {
   var reg = readRecord_(REG_SHEET, userId);
   if (!reg) throw new UserError('先にスタッフ登録を行ってください。');
   if (ONBOARDING_ALLOWED.indexOf(reg.status) < 0) {
     throw new UserError('書類のご提出は、採用のご連絡後にご案内します。');
   }
+  return reg;
+}
+
+/**
+ * 書類の画像を1枚ずつ先に受け取る（まとめて送ると大きすぎて届かないことがあるため）。
+ * 提出時には、ここで返した「upload:ファイルID」を画像の代わりに送ってもらう。
+ */
+function apiUploadImage_(userId, data) {
+  var reg = onboardingRecord_(userId);
+  if (!IMAGE_LABELS[data.key]) throw new UserError('画像の種類が正しくありません。');
+  var m = /^data:image\/(jpeg|png);base64,([A-Za-z0-9+\/=]+)$/.exec(String(data.dataUrl || ''));
+  if (!m || data.dataUrl.length > 7000000) throw new UserError('画像の形式が正しくありません。撮り直してください。');
+  var folder = userFolder_(userId, reg.lastName + ' ' + reg.firstName);
+  var stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss');
+  var file = saveImageFile_(folder, IMAGE_LABELS[data.key] + '_' + stamp, data.dataUrl);
+  return { ok: true, id: 'upload:' + file.getId() };
+}
+
+/** 「upload:ファイルID」がこの人のフォルダの画像なら、そのURLを返す */
+function uploadedImageUrl_(folder, token) {
+  var file;
+  try {
+    file = DriveApp.getFileById(token.replace(/^upload:/, ''));
+  } catch (err) {
+    return null;
+  }
+  var parents = file.getParents();
+  while (parents.hasNext()) {
+    if (parents.next().getId() === folder.getId()) return file.getUrl();
+  }
+  return null;
+}
+
+function apiOnboarding_(userId, data) {
+  var reg = onboardingRecord_(userId);
 
   var result = validateOnboarding(data);
   var record = result.record;
@@ -138,9 +174,17 @@ function apiOnboarding_(userId, data) {
   Object.keys(IMAGE_LABELS).forEach(function (key) { record[key] = ''; });
   var folder = userFolder_(userId, name);
   var stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss');
+  var missing = {};
   Object.keys(result.images).forEach(function (key) {
-    record[key] = saveImage_(folder, IMAGE_LABELS[key] + '_' + stamp, result.images[key]);
+    var value = result.images[key];
+    if (value.indexOf('upload:') === 0) {
+      record[key] = uploadedImageUrl_(folder, value);
+      if (!record[key]) missing[key] = '画像を受け取れませんでした。もう一度選び直してください';
+    } else {
+      record[key] = saveImage_(folder, IMAGE_LABELS[key] + '_' + stamp, value);
+    }
   });
+  if (Object.keys(missing).length) throw new ValidationError(missing);
 
   var existing = readRecord_(ONB_SHEET, userId);
   var now = now_();
@@ -165,8 +209,12 @@ function userFolder_(userId, name) {
   return it.hasNext() ? it.next() : parent.createFolder(folderName);
 }
 
-function saveImage_(folder, name, dataUrl) {
+function saveImageFile_(folder, name, dataUrl) {
   var m = /^data:(image\/(jpeg|png));base64,(.+)$/.exec(dataUrl);
   var blob = Utilities.newBlob(Utilities.base64Decode(m[3]), m[1], name + (m[2] === 'png' ? '.png' : '.jpg'));
-  return folder.createFile(blob).getUrl();
+  return folder.createFile(blob);
+}
+
+function saveImage_(folder, name, dataUrl) {
+  return saveImageFile_(folder, name, dataUrl).getUrl();
 }
