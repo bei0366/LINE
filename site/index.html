@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>セブンハーツ｜イベント運営・キャスティング</title>
+  <meta name="description" content="セブンハーツは大阪・梅田を拠点に、関西一円のイベント運営とスタッフキャスティングを行っています。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&family=Noto+Sans+JP:wght@400;500;700&family=Shippori+Mincho:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --brown: #381e19;
+      --brown-deep: #1c0e0b;
+      --gold: #9e7a34;
+      --gold-light: #d4b06a;
+      --taupe: #a39489;
+      --cream: #f7f3ef;
+      --paper: #fffdfa;
+      --text: #2b1a17;
+      --muted: #6f625b;
+      --line: #06c755;
+      --ease: cubic-bezier(.22, .8, .24, 1);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--text);
+      font-family: "Noto Sans JP", "Hiragino Sans", sans-serif;
+      line-height: 1.9;
+      letter-spacing: .04em;
+      overflow-x: hidden;
+    }
+    img { max-width: 100%; display: block; }
+    a { color: inherit; }
+
+    .en { font-family: "Montserrat", sans-serif; letter-spacing: .18em; }
+    .mincho { font-family: "Shippori Mincho", serif; }
+    .wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
+
+    /* ---------- Header ---------- */
+    .site-header {
+      position: fixed; inset: 0 0 auto; z-index: 50;
+      transition: background .4s, box-shadow .4s, padding .4s;
+      padding: 22px 0;
+    }
+    .site-header.scrolled {
+      background: rgba(255, 253, 250, .88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 1px 0 rgba(56, 30, 25, .08);
+      padding: 12px 0;
+    }
+    .site-header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .brand img { height: 30px; width: auto; transition: filter .4s; filter: brightness(0) invert(1); }
+    .site-header.scrolled .brand img { filter: none; }
+    .nav { display: flex; gap: 28px; align-items: center; }
+    .nav a {
+      text-decoration: none; font-size: .78rem; color: #fff; position: relative; transition: color .4s;
+    }
+    .site-header.scrolled .nav a { color: var(--brown); }
+    .nav a::after {
+      content: ""; position: absolute; left: 0; bottom: -4px; width: 100%; height: 1px;
+      background: var(--gold-light); transform: scaleX(0); transform-origin: right; transition: transform .4s var(--ease);
+    }
+    .nav a:hover::after { transform: scaleX(1); transform-origin: left; }
+    .nav .nav-cta {
+      background: var(--gold); color: #fff !important; padding: 8px 20px; border-radius: 999px;
+    }
+    .nav .nav-cta::after { display: none; }
+    .menu-btn { display: none; background: none; border: 0; width: 40px; height: 40px; cursor: pointer; position: relative; }
+    .menu-btn span { position: absolute; left: 8px; right: 8px; height: 2px; background: #fff; transition: .3s; }
+    .site-header.scrolled .menu-btn span { background: var(--brown); }
+    .menu-btn span:nth-child(1) { top: 14px; }
+    .menu-btn span:nth-child(2) { top: 24px; }
+    body.menu-open .menu-btn span { background: #fff; }
+    body.menu-open .menu-btn span:nth-child(1) { top: 19px; transform: rotate(45deg); }
+    body.menu-open .menu-btn span:nth-child(2) { top: 19px; transform: rotate(-45deg); }
+
+    /* ---------- Hero ---------- */
+    .hero {
+      position: relative; min-height: 100svh; display: grid; place-items: center;
+      color: #fff; overflow: hidden; isolation: isolate;
+      background: radial-gradient(120% 90% at 80% 10%, #5a3226 0%, var(--brown) 45%, var(--brown-deep) 100%);
+    }
+    .hero::before { /* 光の粒 */
+      content: ""; position: absolute; inset: -50%; z-index: -1;
+      background-image:
+        radial-gradient(2px 2px at 20% 30%, rgba(212, 176, 106, .7), transparent 60%),
+        radial-gradient(1.5px 1.5px at 70% 60%, rgba(255, 255, 255, .5), transparent 60%),
+        radial-gradient(2px 2px at 40% 80%, rgba(212, 176, 106, .5), transparent 60%),
+        radial-gradient(1px 1px at 85% 20%, rgba(255, 255, 255, .6), transparent 60%),
+        radial-gradient(1.5px 1.5px at 10% 70%, rgba(212, 176, 106, .6), transparent 60%);
+      background-size: 380px 380px;
+      animation: drift 60s linear infinite;
+    }
+    @keyframes drift { to { transform: translate(380px, -380px); } }
+    .hero .spot {
+      position: absolute; z-index: -1; width: 60vmax; height: 60vmax; border-radius: 50%;
+      background: radial-gradient(circle, rgba(158, 122, 52, .35), transparent 65%);
+      filter: blur(20px); animation: float 14s ease-in-out infinite alternate;
+    }
+    .hero .spot.a { top: -20vmax; left: -15vmax; }
+    .hero .spot.b { bottom: -25vmax; right: -20vmax; animation-delay: -7s; }
+    @keyframes float { to { transform: translate(6vmax, 4vmax) scale(1.1); } }
+
+    .pulse {
+      position: absolute; left: 0; right: 0; top: 50%; z-index: -1; width: 100%; height: 160px;
+      transform: translateY(-50%); opacity: .5;
+    }
+    .pulse path {
+      fill: none; stroke: var(--gold-light); stroke-width: 1.5;
+      stroke-dasharray: 2400; stroke-dashoffset: 2400; animation: beat 5s var(--ease) infinite;
+    }
+    @keyframes beat { 0% { stroke-dashoffset: 2400; } 55%, 100% { stroke-dashoffset: 0; opacity: 0; } 50% { opacity: 1; } }
+
+    .hero-inner { text-align: center; padding: 120px 16px 80px; }
+    .hero-kicker { font-size: .78rem; color: var(--gold-light); margin: 0 0 28px; }
+    .hero h1 {
+      margin: 0; font-weight: 700; line-height: 1.5;
+      font-size: clamp(2rem, 6.4vw, 4.4rem); letter-spacing: .1em;
+    }
+    .hero h1 .line { display: block; overflow: hidden; }
+    .hero h1 .line > span { display: inline-block; transform: translateY(110%); animation: rise 1.2s var(--ease) forwards; }
+    .hero h1 .line:nth-child(2) > span { animation-delay: .18s; }
+    .hero h1 em { font-style: normal; color: var(--gold-light); }
+    @keyframes rise { to { transform: none; } }
+    .hero-lead {
+      margin: 32px auto 0; max-width: 34em; font-size: clamp(.9rem, 1.6vw, 1rem); color: rgba(255, 255, 255, .78);
+      opacity: 0; animation: fade 1.2s .6s forwards;
+    }
+    .hero-actions { margin-top: 44px; display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; opacity: 0; animation: fade 1.2s .9s forwards; }
+    @keyframes fade { to { opacity: 1; } }
+    .scroll-cue {
+      position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%);
+      font-size: .64rem; color: rgba(255, 255, 255, .6); display: flex; flex-direction: column; align-items: center; gap: 10px;
+    }
+    .scroll-cue::after { content: ""; width: 1px; height: 48px; background: linear-gradient(var(--gold-light), transparent); animation: cue 2s infinite; transform-origin: top; }
+    @keyframes cue { 0% { transform: scaleY(0); } 50% { transform: scaleY(1); } 100% { transform: scaleY(1); opacity: 0; } }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      display: inline-flex; align-items: center; gap: 10px; text-decoration: none;
+      padding: 15px 34px; border-radius: 999px; font-weight: 700; font-size: .92rem;
+      transition: transform .3s var(--ease), box-shadow .3s, background .3s; position: relative; overflow: hidden;
+    }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-gold { background: linear-gradient(135deg, var(--gold-light), var(--gold)); color: #fff; box-shadow: 0 10px 30px -10px rgba(158, 122, 52, .8); }
+    .btn-gold::before {
+      content: ""; position: absolute; inset: 0; transform: translateX(-120%);
+      background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, .45), transparent 70%);
+      transition: transform .8s var(--ease);
+    }
+    .btn-gold:hover::before { transform: translateX(120%); }
+    .btn-ghost { border: 1px solid rgba(255, 255, 255, .5); color: #fff; }
+    .btn-ghost:hover { background: rgba(255, 255, 255, .1); }
+    .btn-line { background: var(--line); color: #fff; box-shadow: 0 10px 30px -10px rgba(6, 199, 85, .7); }
+    .btn .arrow { transition: transform .3s var(--ease); }
+    .btn:hover .arrow { transform: translateX(4px); }
+
+    /* ---------- Sections ---------- */
+    section { position: relative; }
+    .sec { padding: clamp(80px, 12vw, 150px) 0; }
+    .sec-head { margin-bottom: clamp(40px, 6vw, 72px); }
+    .sec-head .en { display: block; color: var(--gold); font-size: .78rem; font-weight: 700; margin-bottom: 12px; }
+    .sec-head h2 { margin: 0; font-size: clamp(1.6rem, 3.6vw, 2.4rem); line-height: 1.5; color: var(--brown); }
+    .sec-head p { color: var(--muted); max-width: 40em; margin: 18px 0 0; }
+    .center { text-align: center; }
+    .center p { margin-inline: auto; }
+
+    /* reveal */
+    .reveal { opacity: 0; transform: translateY(36px); transition: opacity 1s var(--ease), transform 1s var(--ease); }
+    .reveal.in { opacity: 1; transform: none; }
+    .reveal.d1 { transition-delay: .12s; } .reveal.d2 { transition-delay: .24s; } .reveal.d3 { transition-delay: .36s; }
+
+    /* ---------- Marquee ---------- */
+    .marquee { background: var(--brown); color: var(--gold-light); overflow: hidden; padding: 18px 0; white-space: nowrap; }
+    .marquee-track { display: inline-flex; gap: 48px; animation: marquee 40s linear infinite; font-size: clamp(1rem, 2vw, 1.3rem); font-weight: 700; }
+    .marquee-track span::after { content: "♥"; margin-left: 48px; font-size: .7em; color: var(--taupe); }
+    @keyframes marquee { to { transform: translateX(-50%); } }
+
+    /* ---------- About ---------- */
+    .about { background: var(--paper); }
+    .about-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: clamp(40px, 7vw, 96px); align-items: center; }
+    .about-visual {
+      aspect-ratio: 4 / 5; border-radius: 4px 160px 4px 4px; position: relative; overflow: hidden;
+      background: linear-gradient(160deg, #6b4433, var(--brown) 55%, var(--brown-deep));
+    }
+    .about-visual svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .about-visual .tag {
+      position: absolute; left: 24px; bottom: 24px; color: #fff; font-size: .7rem;
+      border-left: 2px solid var(--gold-light); padding-left: 12px; line-height: 1.6;
+    }
+    .about-visual::after {
+      content: ""; position: absolute; inset: 16px; border: 1px solid rgba(212, 176, 106, .35); border-radius: 2px 148px 2px 2px; pointer-events: none;
+    }
+    .about-text h3 { font-size: clamp(1.4rem, 2.8vw, 2rem); color: var(--brown); line-height: 1.6; margin: 0 0 24px; }
+    .about-text p { color: var(--muted); }
+    .signature { margin-top: 32px; display: flex; align-items: center; gap: 16px; }
+    .signature .role { font-size: .75rem; color: var(--muted); }
+    .signature .name { font-size: 1.3rem; color: var(--brown); }
+
+    /* ---------- Service ---------- */
+    .service { background: var(--cream); }
+    .service-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .card {
+      background: #fff; border-radius: 18px; padding: 40px 32px 36px; position: relative; overflow: hidden;
+      box-shadow: 0 1px 0 rgba(56, 30, 25, .04), 0 24px 48px -32px rgba(56, 30, 25, .35);
+      transition: transform .5s var(--ease), box-shadow .5s var(--ease);
+    }
+    .card:hover { transform: translateY(-8px); box-shadow: 0 1px 0 rgba(56, 30, 25, .04), 0 40px 60px -32px rgba(56, 30, 25, .45); }
+    .card::before {
+      content: ""; position: absolute; left: 0; top: 0; height: 3px; width: 100%;
+      background: linear-gradient(90deg, var(--gold), var(--gold-light)); transform: scaleX(0); transform-origin: left; transition: transform .6s var(--ease);
+    }
+    .card:hover::before { transform: scaleX(1); }
+    .card .num { position: absolute; right: 24px; top: 14px; font-size: 3.6rem; font-weight: 800; color: rgba(158, 122, 52, .12); line-height: 1; }
+    .card .icon {
+      width: 60px; height: 60px; border-radius: 16px; display: grid; place-items: center; margin-bottom: 24px;
+      background: linear-gradient(135deg, var(--brown), #5a3226); color: var(--gold-light);
+    }
+    .card .icon svg { width: 28px; height: 28px; }
+    .card h3 { margin: 0 0 4px; font-size: 1.15rem; color: var(--brown); }
+    .card .sub { font-size: .66rem; color: var(--gold); margin-bottom: 16px; display: block; }
+    .card p { margin: 0; font-size: .9rem; color: var(--muted); }
+    .card ul { margin: 18px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+    .card li { font-size: .74rem; padding: 4px 12px; border-radius: 999px; background: var(--cream); color: var(--brown); }
+
+    /* ---------- Strength ---------- */
+    .strength { background: var(--brown); color: #fff; overflow: hidden; }
+    .strength .sec-head h2 { color: #fff; }
+    .strength .sec-head p { color: rgba(255, 255, 255, .7); }
+    .strength-list { display: grid; gap: 2px; background: rgba(212, 176, 106, .2); border-block: 1px solid rgba(212, 176, 106, .2); }
+    .strength-item {
+      display: grid; grid-template-columns: 120px 1fr 1.3fr; gap: 32px; align-items: center;
+      background: var(--brown); padding: 40px 8px; transition: background .5s;
+    }
+    .strength-item:hover { background: #43251f; }
+    .strength-item .no { font-size: 2.6rem; font-weight: 800; color: var(--gold-light); }
+    .strength-item h3 { margin: 0; font-size: 1.3rem; line-height: 1.6; }
+    .strength-item p { margin: 0; color: rgba(255, 255, 255, .72); font-size: .92rem; }
+
+    /* ---------- Area ---------- */
+    .area-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(32px, 6vw, 80px); align-items: center; }
+    .pref-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .pref {
+      border: 1px solid #e6dcd3; border-radius: 14px; padding: 22px 12px; text-align: center; background: #fff;
+      transition: border-color .4s, transform .4s var(--ease), background .4s;
+    }
+    .pref:hover { border-color: var(--gold); transform: translateY(-4px); background: #fbf6ec; }
+    .pref b { display: block; font-size: 1.15rem; color: var(--brown); }
+    .pref small { font-size: .6rem; color: var(--gold); }
+
+    /* ---------- Flow ---------- */
+    .flow { background: var(--cream); }
+    .flow-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; counter-reset: step; position: relative; }
+    .flow-steps::before {
+      content: ""; position: absolute; top: 36px; left: 12%; right: 12%; height: 1px;
+      background: repeating-linear-gradient(90deg, var(--gold) 0 6px, transparent 6px 12px);
+    }
+    .step { text-align: center; position: relative; }
+    .step .dot {
+      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto 20px; display: grid; place-items: center;
+      background: #fff; border: 1px solid var(--gold); color: var(--brown); font-weight: 800; font-size: 1.1rem; position: relative;
+      box-shadow: 0 0 0 8px var(--cream);
+    }
+    .step h3 { margin: 0 0 8px; font-size: 1rem; color: var(--brown); }
+    .step p { margin: 0; font-size: .84rem; color: var(--muted); }
+
+    /* ---------- Recruit ---------- */
+    .recruit {
+      background:
+        linear-gradient(120deg, rgba(28, 14, 11, .92), rgba(56, 30, 25, .82)),
+        radial-gradient(80% 120% at 100% 0%, var(--gold), transparent 60%), var(--brown);
+      color: #fff; overflow: hidden;
+    }
+    .recruit-inner { display: grid; grid-template-columns: 1.2fr 1fr; gap: clamp(32px, 6vw, 80px); align-items: center; }
+    .recruit .sec-head h2 { color: #fff; }
+    .recruit .sec-head p { color: rgba(255, 255, 255, .75); }
+    .perks { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 0; padding: 0; list-style: none; }
+    .perks li {
+      border: 1px solid rgba(212, 176, 106, .35); border-radius: 14px; padding: 18px; background: rgba(255, 255, 255, .04);
+      backdrop-filter: blur(4px);
+    }
+    .perks b { display: block; color: var(--gold-light); font-size: 1rem; margin-bottom: 2px; }
+    .perks span { font-size: .8rem; color: rgba(255, 255, 255, .72); }
+    .line-card {
+      background: #fff; color: var(--text); border-radius: 24px; padding: 40px 32px; text-align: center;
+      box-shadow: 0 40px 80px -30px rgba(0, 0, 0, .6);
+    }
+    .line-card .badge { display: inline-block; font-size: .7rem; padding: 4px 14px; border-radius: 999px; background: #e9f9ef; color: #04913f; font-weight: 700; margin-bottom: 16px; }
+    .line-card h3 { margin: 0 0 12px; color: var(--brown); font-size: 1.3rem; }
+    .line-card p { font-size: .86rem; color: var(--muted); margin: 0 0 24px; }
+    .line-card .btn { width: 100%; justify-content: center; }
+    .line-card ol { text-align: left; font-size: .8rem; color: var(--muted); margin: 24px 0 0; padding-left: 1.4em; }
+
+    /* ---------- Company ---------- */
+    .company-table { width: 100%; border-collapse: collapse; }
+    .company-table th, .company-table td { text-align: left; padding: 22px 8px; border-bottom: 1px solid #e6dcd3; vertical-align: top; }
+    .company-table th { width: 28%; font-weight: 500; color: var(--gold); font-size: .88rem; }
+    .company-table tr:first-child th, .company-table tr:first-child td { border-top: 1px solid var(--brown); }
+    .company-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(32px, 6vw, 80px); align-items: start; }
+    .map { border-radius: 18px; overflow: hidden; aspect-ratio: 4 / 3; background: var(--cream); }
+    .map iframe { width: 100%; height: 100%; border: 0; filter: grayscale(.4) sepia(.15); }
+
+    /* ---------- Contact ---------- */
+    .contact { padding: clamp(70px, 10vw, 120px) 0; background: var(--cream); }
+    .contact-box {
+      background: #fff; border-radius: 28px; padding: clamp(36px, 6vw, 72px); display: grid; grid-template-columns: 1fr auto; gap: 32px; align-items: center;
+      box-shadow: 0 30px 60px -40px rgba(56, 30, 25, .4); position: relative; overflow: hidden;
+    }
+    .contact-box::before {
+      content: ""; position: absolute; right: -80px; top: -80px; width: 260px; height: 260px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(212, 176, 106, .25), transparent 70%);
+    }
+    .contact-box h2 { margin: 0 0 8px; color: var(--brown); font-size: clamp(1.4rem, 3vw, 2rem); }
+    .contact-box p { margin: 0; color: var(--muted); }
+    .contact-actions { display: flex; flex-direction: column; gap: 12px; position: relative; }
+
+    /* ---------- Footer ---------- */
+    footer { background: var(--brown-deep); color: rgba(255, 255, 255, .6); padding: 64px 0 32px; font-size: .8rem; }
+    footer .wrap { display: grid; gap: 32px; }
+    footer .top { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
+    footer .top img { height: 34px; width: auto; filter: brightness(0) invert(1); opacity: .9; }
+    footer nav { display: flex; gap: 24px; flex-wrap: wrap; }
+    footer nav a { text-decoration: none; }
+    footer nav a:hover { color: var(--gold-light); }
+    footer .copy { border-top: 1px solid rgba(255, 255, 255, .1); padding-top: 24px; font-size: .7rem; }
+
+    .to-top {
+      position: fixed; right: 20px; bottom: 20px; z-index: 40; width: 52px; height: 52px; border-radius: 50%;
+      background: var(--brown); color: var(--gold-light); display: grid; place-items: center; text-decoration: none;
+      opacity: 0; transform: translateY(20px); transition: .4s var(--ease); box-shadow: 0 10px 30px -10px rgba(0, 0, 0, .5);
+    }
+    .to-top.show { opacity: 1; transform: none; }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 900px) {
+      .nav {
+        position: fixed; inset: 0; background: rgba(28, 14, 11, .97); flex-direction: column; justify-content: center; gap: 28px;
+        opacity: 0; pointer-events: none; transition: opacity .4s;
+      }
+      .nav a, .site-header.scrolled .nav a { color: #fff; font-size: 1rem; }
+      body.menu-open .nav { opacity: 1; pointer-events: auto; }
+      .menu-btn { display: block; z-index: 2; }
+      .about-grid, .area-wrap, .recruit-inner, .company-grid { grid-template-columns: 1fr; }
+      .about-visual { max-width: 420px; aspect-ratio: 5 / 4; }
+      .service-grid { grid-template-columns: 1fr; }
+      .strength-item { grid-template-columns: 64px 1fr; gap: 8px 20px; padding: 32px 4px; }
+      .strength-item .no { font-size: 1.8rem; grid-row: span 2; align-self: start; }
+      .flow-steps { grid-template-columns: 1fr 1fr; row-gap: 40px; }
+      .flow-steps::before { display: none; }
+      .contact-box { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 520px) {
+      .brand img { height: 22px; }
+      .pref-list { grid-template-columns: repeat(2, 1fr); }
+      .perks { grid-template-columns: 1fr; }
+      .company-table th { width: 32%; }
+      .btn { padding: 14px 26px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+      .reveal { opacity: 1; transform: none; }
+      .hero h1 .line > span { transform: none; }
+      .hero-lead, .hero-actions { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header" id="header">
+    <div class="wrap">
+      <a href="#top" class="brand" aria-label="SEVEN HEARTS トップへ"><img src="img/logo.png" alt="SEVEN HEARTS EVENT DIRECTION &amp; CASTING" width="216" height="30"></a>
+      <button class="menu-btn" id="menuBtn" aria-label="メニュー" aria-expanded="false"><span></span><span></span></button>
+      <nav class="nav" id="nav">
+        <a href="#about">私たちについて</a>
+        <a href="#service">事業内容</a>
+        <a href="#strength">強み</a>
+        <a href="#recruit">スタッフ募集</a>
+        <a href="#company">会社概要</a>
+        <a href="#contact" class="nav-cta">お問い合わせ</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- HERO -->
+    <section class="hero">
+      <div class="spot a"></div><div class="spot b"></div>
+      <svg class="pulse" viewBox="0 0 1200 160" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0 80 H430 L460 80 L480 30 L505 130 L530 10 L555 150 L580 60 L600 80 H1200" />
+      </svg>
+      <div class="hero-inner">
+        <p class="hero-kicker en">EVENT DIRECTION &amp; CASTING</p>
+        <h1 class="mincho">
+          <span class="line"><span>心を動かす瞬間を、</span></span>
+          <span class="line"><span><em>人の力</em>でつくる。</span></span>
+        </h1>
+        <p class="hero-lead">セブンハーツは、大阪・梅田を拠点に関西一円のイベント運営とスタッフキャスティングを手がけています。来場者の笑顔と、現場で輝くスタッフの想い。その両方を大切にしています。</p>
+        <div class="hero-actions">
+          <a href="#contact" class="btn btn-gold">イベントのご相談 <span class="arrow">→</span></a>
+          <a href="#recruit" class="btn btn-ghost">スタッフ募集を見る</a>
+        </div>
+      </div>
+      <div class="scroll-cue en">SCROLL</div>
+    </section>
+
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee-track en">
+        <span>EVENT DIRECTION</span><span>STAFF CASTING</span><span>CONCERT</span><span>EXHIBITION</span><span>PROMOTION</span><span>SPORTS</span>
+        <span>EVENT DIRECTION</span><span>STAFF CASTING</span><span>CONCERT</span><span>EXHIBITION</span><span>PROMOTION</span><span>SPORTS</span>
+      </div>
+    </div>
+
+    <!-- ABOUT -->
+    <section class="sec about" id="about">
+      <div class="wrap about-grid">
+        <div class="about-visual reveal" aria-hidden="true">
+          <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice">
+            <defs>
+              <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d4b06a"/><stop offset="1" stop-color="#9e7a34"/></linearGradient>
+            </defs>
+            <g opacity=".14" stroke="#d4b06a">
+              <circle cx="200" cy="230" r="90" fill="none"/><circle cx="200" cy="230" r="140" fill="none"/><circle cx="200" cy="230" r="190" fill="none"/>
+            </g>
+            <path d="M200 315 C120 260 95 220 95 185 C95 155 118 135 145 135 C170 135 188 150 200 170 C212 150 230 135 255 135 C282 135 305 155 305 185 C305 220 280 260 200 315Z" fill="url(#g1)"/>
+            <path d="M60 225 H150 L165 225 L178 195 L195 260 L212 175 L228 245 L240 225 H340" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
+          <div class="tag en">SINCE OSAKA<br>UMEDA</div>
+        </div>
+        <div class="about-text">
+          <div class="sec-head reveal">
+            <span class="en">ABOUT US</span>
+            <h2 class="mincho">ひとつのイベントに、<br>7つの想いを込めて。</h2>
+          </div>
+          <p class="reveal d1">イベントの成功は、現場に立つ一人ひとりで決まります。私たちは企画・運営の段取りから、会場で働くスタッフの採用・育成・配置までを一貫して担い、主催者さまが安心して当日を迎えられる体制をつくります。</p>
+          <p class="reveal d2">ロゴに込めたハートビートは「現場の鼓動」。お客さまの高揚感と、スタッフのやりがいが重なる瞬間を、これからも関西のあちこちで生み出していきます。</p>
+          <div class="signature reveal d3">
+            <div>
+              <div class="role">代表</div>
+              <div class="name mincho">前田 和真</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SERVICE -->
+    <section class="sec service" id="service">
+      <div class="wrap">
+        <div class="sec-head center reveal">
+          <span class="en">SERVICE</span>
+          <h2 class="mincho">事業内容</h2>
+          <p>企画段階のご相談から当日の運営、スタッフの手配まで。必要なところだけのご依頼も承ります。</p>
+        </div>
+        <div class="service-grid">
+          <article class="card reveal">
+            <span class="num en">01</span>
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6"/></svg></div>
+            <h3>イベント運営・ディレクション</h3>
+            <span class="sub en">EVENT DIRECTION</span>
+            <p>動線設計、タイムテーブル、当日の進行管理まで。現場責任者が常駐し、トラブルにも迅速に対応します。</p>
+            <ul><li>コンサート</li><li>展示会</li><li>スポーツ</li><li>地域イベント</li></ul>
+          </article>
+          <article class="card reveal d1">
+            <span class="num en">02</span>
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9.5" r="2.4"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M15 14.5c3 0 6 1.8 6 5"/></svg></div>
+            <h3>スタッフキャスティング</h3>
+            <span class="sub en">STAFF CASTING</span>
+            <p>登録スタッフの中から、イベントの内容・規模に合わせて最適な人材を選定。少人数から大規模まで対応します。</p>
+            <ul><li>受付・案内</li><li>誘導・警備補助</li><li>物販</li><li>設営・撤去</li></ul>
+          </article>
+          <article class="card reveal d2">
+            <span class="num en">03</span>
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11l14-6v14L3 13z"/><path d="M7 13v5a2 2 0 0 0 4 0v-4M20 9v4"/></svg></div>
+            <h3>プロモーション・販促</h3>
+            <span class="sub en">PROMOTION</span>
+            <p>商業施設や店頭でのサンプリング、キャンペーン運営など、ブランドの魅力を直接届ける施策をサポートします。</p>
+            <ul><li>サンプリング</li><li>キャンペーン</li><li>ポップアップ</li></ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- STRENGTH -->
+    <section class="sec strength" id="strength">
+      <div class="wrap">
+        <div class="sec-head reveal">
+          <span class="en">STRENGTH</span>
+          <h2 class="mincho">選ばれる理由</h2>
+          <p>「また一緒にやりたい」と言っていただける現場づくりのために。</p>
+        </div>
+        <div class="strength-list">
+          <div class="strength-item reveal">
+            <div class="no en">01</div>
+            <h3>採用から配置まで<br>一気通貫の人材体制</h3>
+            <p>面接・研修を経たスタッフを自社で登録・管理。イベントの特性に合わせて、経験やスキルを見極めて配置します。</p>
+          </div>
+          <div class="strength-item reveal">
+            <div class="no en">02</div>
+            <h3>関西2府4県を<br>カバーする機動力</h3>
+            <p>大阪・兵庫・京都・滋賀・奈良・和歌山。各エリアに登録スタッフがいるため、急な増員や遠方の会場にも柔軟に対応します。</p>
+          </div>
+          <div class="strength-item reveal">
+            <div class="no en">03</div>
+            <h3>LINEで完結する<br>スピーディな連絡網</h3>
+            <p>登録・面接・シフト連絡までLINEで一元化。当日の欠員にもすばやく対応できる仕組みを整えています。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- AREA -->
+    <section class="sec">
+      <div class="wrap area-wrap">
+        <div class="sec-head reveal" style="margin-bottom:0">
+          <span class="en">AREA</span>
+          <h2 class="mincho">対応エリア</h2>
+          <p>大阪・梅田を拠点に、関西2府4県のイベントに対応しています。エリア外の案件もお気軽にご相談ください。</p>
+        </div>
+        <div class="pref-list">
+          <div class="pref reveal"><b>大阪</b><small class="en">OSAKA</small></div>
+          <div class="pref reveal d1"><b>兵庫</b><small class="en">HYOGO</small></div>
+          <div class="pref reveal d2"><b>京都</b><small class="en">KYOTO</small></div>
+          <div class="pref reveal"><b>滋賀</b><small class="en">SHIGA</small></div>
+          <div class="pref reveal d1"><b>奈良</b><small class="en">NARA</small></div>
+          <div class="pref reveal d2"><b>和歌山</b><small class="en">WAKAYAMA</small></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FLOW -->
+    <section class="sec flow">
+      <div class="wrap">
+        <div class="sec-head center reveal">
+          <span class="en">FLOW</span>
+          <h2 class="mincho">ご依頼の流れ</h2>
+        </div>
+        <div class="flow-steps">
+          <div class="step reveal"><div class="dot en">01</div><h3>お問い合わせ</h3><p>日時・会場・規模などをお知らせください。</p></div>
+          <div class="step reveal d1"><div class="dot en">02</div><h3>お打ち合わせ</h3><p>内容を伺い、必要な人数と体制をご提案します。</p></div>
+          <div class="step reveal d2"><div class="dot en">03</div><h3>お見積り・ご契約</h3><p>内容にご納得いただいてからのご契約です。</p></div>
+          <div class="step reveal d3"><div class="dot en">04</div><h3>当日運営</h3><p>現場責任者のもと、スタッフが運営を担います。</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RECRUIT -->
+    <section class="sec recruit" id="recruit">
+      <div class="wrap recruit-inner">
+        <div>
+          <div class="sec-head reveal">
+            <span class="en" style="color:var(--gold-light)">RECRUIT</span>
+            <h2 class="mincho">イベントスタッフ<br>大募集。</h2>
+            <p>コンサート、スポーツ、展示会…。非日常の舞台裏で、あなたも一緒に働いてみませんか。学生・主婦（夫）・Wワークの方も大歓迎です。</p>
+          </div>
+          <ul class="perks">
+            <li class="reveal"><b>日払い・日雇いOK</b><span>働いた分をすぐに受け取れます</span></li>
+            <li class="reveal d1"><b>好きな日だけ</b><span>予定に合わせてシフトを選べます</span></li>
+            <li class="reveal d2"><b>未経験でも安心</b><span>現場責任者が丁寧にサポート</span></li>
+            <li class="reveal d3"><b>関西各地で募集</b><span>2府4県から希望エリアを選択</span></li>
+          </ul>
+        </div>
+        <div class="line-card reveal d1">
+          <span class="badge">LINEでかんたん登録</span>
+          <h3>友だち追加して<br>スタッフ登録</h3>
+          <p>履歴書は不要。LINEのトークに答えて、フォームを送るだけで登録できます。</p>
+          <!-- LINE公式アカウントの友だち追加URL（https://lin.ee/xxxx）に差し替えてください -->
+          <a href="#" class="btn btn-line" id="lineAddLink">LINEで友だち追加</a>
+          <ol>
+            <li>友だち追加してお名前を送信</li>
+            <li>登録フォームに入力</li>
+            <li>LINE通話で面接（約15分）</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMPANY -->
+    <section class="sec" id="company">
+      <div class="wrap company-grid">
+        <div>
+          <div class="sec-head reveal">
+            <span class="en">COMPANY</span>
+            <h2 class="mincho">会社概要</h2>
+          </div>
+          <table class="company-table reveal d1">
+            <tr><th>事業者名</th><td>セブンハーツ（SEVEN HEARTS）</td></tr>
+            <tr><th>代表者</th><td>前田 和真</td></tr>
+            <tr><th>所在地</th><td>〒530-0001<br>大阪府大阪市北区梅田1丁目1-3<br>大阪駅前第3ビル2307</td></tr>
+            <tr><th>事業内容</th><td>イベントの企画・運営<br>イベントスタッフのキャスティング<br>プロモーション・販促支援</td></tr>
+            <tr><th>お問い合わせ</th><td><a href="mailto:info@seven-hearts.com">info@seven-hearts.com</a></td></tr>
+          </table>
+        </div>
+        <div class="map reveal d2">
+          <iframe title="セブンハーツ 所在地の地図" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+            src="https://maps.google.com/maps?q=%E5%A4%A7%E9%98%AA%E9%A7%85%E5%89%8D%E7%AC%AC3%E3%83%93%E3%83%AB&z=16&output=embed"></iframe>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACT -->
+    <section class="contact" id="contact">
+      <div class="wrap">
+        <div class="contact-box reveal">
+          <div>
+            <span class="en" style="color:var(--gold);font-size:.78rem;font-weight:700">CONTACT</span>
+            <h2 class="mincho">イベントのこと、<br>まずはお気軽にご相談ください。</h2>
+            <p>人数や日程が決まっていない段階でも大丈夫です。</p>
+          </div>
+          <div class="contact-actions">
+            <a href="mailto:info@seven-hearts.com" class="btn btn-gold">メールで問い合わせ <span class="arrow">→</span></a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="top">
+        <img src="img/logo.png" alt="SEVEN HEARTS" width="245" height="34">
+        <nav>
+          <a href="#about">私たちについて</a>
+          <a href="#service">事業内容</a>
+          <a href="#recruit">スタッフ募集</a>
+          <a href="#company">会社概要</a>
+          <a href="#contact">お問い合わせ</a>
+        </nav>
+      </div>
+      <div>大阪府大阪市北区梅田1丁目1-3 大阪駅前第3ビル2307</div>
+      <div class="copy en">© SEVEN HEARTS. ALL RIGHTS RESERVED.</div>
+    </div>
+  </footer>
+
+  <a href="#top" class="to-top" id="toTop" aria-label="ページの先頭へ">↑</a>
+
+  <script>
+    (function () {
+      var header = document.getElementById('header');
+      var toTop = document.getElementById('toTop');
+      function onScroll() {
+        var y = window.scrollY;
+        header.classList.toggle('scrolled', y > 40);
+        toTop.classList.toggle('show', y > 600);
+      }
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+
+      var btn = document.getElementById('menuBtn');
+      btn.addEventListener('click', function () {
+        var open = document.body.classList.toggle('menu-open');
+        btn.setAttribute('aria-expanded', open);
+      });
+      document.querySelectorAll('#nav a').forEach(function (a) {
+        a.addEventListener('click', function () {
+          document.body.classList.remove('menu-open');
+          btn.setAttribute('aria-expanded', 'false');
+        });
+      });
+
+      var targets = document.querySelectorAll('.reveal');
+      if (!('IntersectionObserver' in window)) {
+        targets.forEach(function (el) { el.classList.add('in'); });
+        return;
+      }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+        });
+      }, { rootMargin: '0px 0px -10% 0px' });
+      targets.forEach(function (el) { io.observe(el); });
+    })();
+  </script>
+</body>
+</html>
