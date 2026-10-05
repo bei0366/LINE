@@ -6,8 +6,9 @@
 /** 登録フォームに再表示してよい項目（本人が入力したもののみ） */
 var REG_EDITABLE_KEYS = [
   'lastName', 'firstName', 'lastNameKana', 'firstNameKana', 'birthDate', 'gender',
-  'phone', 'postalCode', 'prefecture', 'city', 'building', 'nearestStation',
-  'occupation', 'areas', 'note'
+  'phone', 'email', 'postalCode', 'prefecture', 'city', 'building', 'nearestStation',
+  'occupation', 'weekdays', 'timeSlots', 'areas', 'experiences', 'licenses', 'languages',
+  'height', 'clothingSize', 'shoeSize', 'hairColor', 'tattoo', 'note'
 ];
 
 var IMAGE_LABELS = {
@@ -73,8 +74,7 @@ function saveRegistration_(userId, input, source) {
   var record = validateRegistration(input, new Date(), { interviewOptional: !!existing });
   // 登録済みの人の内容変更では、面接日時は入力されたときだけ上書きする
   if (existing && !record.interview1) {
-    delete record.interview1;
-    delete record.interview2;
+    INTERVIEW_KEYS.forEach(function (k) { delete record[k]; });
   }
   var now = now_();
   record.updatedAt = now;

@@ -8,7 +8,8 @@
 </head>
 <body>
   <header>
-    <h1>セブンハーツ スタッフ登録</h1>
+    <img class="logo" src="img/logo.png" alt="SEVEN HEARTS">
+    <h1>スタッフ登録</h1>
     <p>イベント運営スタッフ（日払い・日雇いアルバイト）</p>
   </header>
 
@@ -33,7 +34,7 @@
 
     <form id="screen-form" data-screen hidden novalidate>
       <p class="notice" id="edit-notice" hidden>登録済みの内容を表示しています。変更して「更新する」を押してください。</p>
-      <p class="notice" id="new-notice">入力は約2分で終わります。<span class="req">必須</span> の項目は必ず入力してください。</p>
+      <p class="notice" id="new-notice">入力は約3分で終わります。<span class="req">必須</span> の項目は必ず入力してください。</p>
 
       <section class="card">
         <h2>基本情報</h2>
@@ -71,6 +72,10 @@
           <p class="hint">当日の緊急連絡に使います。</p>
         </div>
         <div class="field">
+          <label for="email">メールアドレス<span class="opt">任意</span></label>
+          <input type="email" id="email" name="email" placeholder="example@mail.com" autocomplete="email">
+        </div>
+        <div class="field">
           <label for="postalCode">郵便番号<span class="req">必須</span></label>
           <input type="text" id="postalCode" name="postalCode" placeholder="1234567（ハイフンなし）" inputmode="numeric" autocomplete="postal-code" maxlength="8" required>
           <p class="hint">入力すると住所が自動で入ります。</p>
@@ -83,7 +88,7 @@
         </div>
         <div class="field">
           <label for="city">市区町村・番地<span class="req">必須</span></label>
-          <input type="text" id="city" name="city" placeholder="渋谷区道玄坂1-2-3" maxlength="100" required>
+          <input type="text" id="city" name="city" placeholder="大阪市北区梅田1-2-3" maxlength="100" required>
         </div>
         <div class="field">
           <label for="building">建物名・部屋番号<span class="opt">任意</span></label>
@@ -91,7 +96,7 @@
         </div>
         <div class="field">
           <label for="nearestStation">最寄り駅<span class="req">必須</span></label>
-          <input type="text" id="nearestStation" name="nearestStation" placeholder="例：JR山手線 渋谷駅" maxlength="50" required>
+          <input type="text" id="nearestStation" name="nearestStation" placeholder="例：JR大阪駅" maxlength="50" required>
           <p class="hint">お仕事のご紹介と交通費の計算に使います。</p>
         </div>
       </section>
@@ -104,10 +109,64 @@
             <option value="">選択してください</option>
           </select>
         </div>
+        <div class="field" data-field="weekdays">
+          <div class="label">勤務できる曜日<span class="req">必須</span></div>
+          <div class="choices" data-options="weekdays" data-name="weekdays" data-required></div>
+        </div>
+        <div class="field" data-field="timeSlots">
+          <div class="label">勤務できる時間帯<span class="req">必須</span></div>
+          <div class="choices" data-options="timeSlots" data-name="timeSlots" data-required></div>
+        </div>
         <div class="field" data-field="areas">
           <div class="label">勤務を希望するエリア<span class="req">必須</span></div>
           <div class="choices" data-options="areas" data-name="areas" data-required></div>
           <p class="hint">いくつでも選べます。</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>経験・スキル</h2>
+        <div class="field" data-field="experiences">
+          <div class="label">経験のある業務<span class="req">必須</span></div>
+          <div class="choices" data-options="experiences" data-name="experiences" data-required></div>
+          <p class="hint">未経験の方は「イベント経験なし」を選んでください。</p>
+        </div>
+        <div class="field" data-field="licenses">
+          <div class="label">資格・免許<span class="opt">任意</span></div>
+          <div class="choices" data-options="licenses" data-name="licenses"></div>
+        </div>
+        <div class="field" data-field="languages">
+          <div class="label">日常会話ができる外国語<span class="opt">任意</span></div>
+          <div class="choices" data-options="languages" data-name="languages"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>ユニフォーム・身だしなみ</h2>
+        <div class="row">
+          <div class="field">
+            <label for="height">身長(cm)<span class="req">必須</span></label>
+            <input type="number" id="height" name="height" min="100" max="230" step="1" inputmode="numeric" required>
+          </div>
+          <div class="field">
+            <label for="shoeSize">靴(cm)<span class="req">必須</span></label>
+            <input type="number" id="shoeSize" name="shoeSize" min="18" max="35" step="0.5" inputmode="decimal" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="clothingSize">服のサイズ<span class="req">必須</span></label>
+          <select id="clothingSize" name="clothingSize" data-options="clothingSizes" required>
+            <option value="">選択してください</option>
+          </select>
+        </div>
+        <div class="field" data-field="hairColor">
+          <div class="label">現在の髪色<span class="req">必須</span></div>
+          <div class="choices" data-options="hairColors" data-name="hairColor" data-type="radio" data-required></div>
+        </div>
+        <div class="field" data-field="tattoo">
+          <div class="label">半袖で見える位置のタトゥー<span class="req">必須</span></div>
+          <div class="choices" data-options="yesNo" data-name="tattoo" data-type="radio" data-required></div>
+          <p class="hint">お仕事先ごとの身だしなみの規定に合わせてご案内するために伺っています。</p>
         </div>
         <div class="field">
           <label for="note">自己PR・ご要望<span class="opt">任意</span></label>
@@ -117,7 +176,7 @@
 
       <section class="card" id="interview-section" hidden>
         <h2>面接のご希望日時</h2>
-        <p class="hint" style="margin-top:0">担当者が調整のうえ、確定した日時をLINEでご連絡します。</p>
+        <p class="hint" style="margin:0 0 12px">第4希望まで選べます。候補が多いほど早く日程が決まります。担当者が調整のうえ、確定した日時をLINEでご連絡します。</p>
         <div class="field">
           <label for="interview1">第1希望<span class="req">必須</span></label>
           <input type="datetime-local" id="interview1" name="interview1" required>
@@ -125,6 +184,14 @@
         <div class="field">
           <label for="interview2">第2希望<span class="opt">任意</span></label>
           <input type="datetime-local" id="interview2" name="interview2">
+        </div>
+        <div class="field">
+          <label for="interview3">第3希望<span class="opt">任意</span></label>
+          <input type="datetime-local" id="interview3" name="interview3">
+        </div>
+        <div class="field">
+          <label for="interview4">第4希望<span class="opt">任意</span></label>
+          <input type="datetime-local" id="interview4" name="interview4">
         </div>
       </section>
 

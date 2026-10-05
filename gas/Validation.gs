@@ -12,6 +12,8 @@ ValidationError.prototype = Object.create(Error.prototype);
 
 var LIST_SEPARATOR = '、';
 var INTERVIEW_MAX_DAYS = 90;
+var INTERVIEW_KEYS = ['interview1', 'interview2', 'interview3', 'interview4']; // 第1〜第4希望
+var NIGHT_SLOT = '深夜（22〜5時）';
 var MY_NUMBER_CARD = 'マイナンバーカード（表面のみ）';
 
 /** 全角英数字・記号を半角に */
@@ -144,6 +146,13 @@ Validator_.prototype.phone = function (key, opt) {
 Validator_.prototype.postal = function (key, opt) {
   var v = this.digits_(key, opt);
   if (v && !/^\d{7}$/.test(v)) this.error(key, '郵便番号は7桁の数字で入力してください');
+  return v;
+};
+
+Validator_.prototype.email = function (key, opt) {
+  var v = this.text(key, { max: 254, optional: opt && opt.optional });
+  if (v) v = toHalfWidth_(v);
+  if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) this.error(key, 'メールアドレスを正しく入力してください');
   return v;
 };
 
@@ -287,6 +296,7 @@ function validateRegistration(input, today, opts) {
   r.gender = v.oneOf('gender', OPTIONS.gender);
 
   r.phone = v.phone('phone');
+  r.email = v.email('email', { optional: true });
   r.postalCode = v.postal('postalCode');
   r.prefecture = v.oneOf('prefecture', OPTIONS.prefectures);
   r.city = v.text('city', { max: 100 });
@@ -294,11 +304,32 @@ function validateRegistration(input, today, opts) {
   r.nearestStation = v.text('nearestStation', { max: 50 });
 
   r.occupation = v.oneOf('occupation', OPTIONS.occupation);
+  r.weekdays = v.manyOf('weekdays', OPTIONS.weekdays);
+  r.timeSlots = v.manyOf('timeSlots', OPTIONS.timeSlots);
   r.areas = v.manyOf('areas', OPTIONS.areas);
 
-  r.interview1 = v.datetime('interview1', { today: today, optional: opts.interviewOptional });
-  r.interview2 = v.datetime('interview2', { today: today, optional: true });
+  r.experiences = v.manyOf('experiences', OPTIONS.experiences);
+  r.licenses = v.manyOf('licenses', OPTIONS.licenses, { optional: true });
+  r.languages = v.manyOf('languages', OPTIONS.languages, { optional: true });
+
+  r.height = v.number('height', { min: 100, max: 230, step: 1 });
+  r.clothingSize = v.oneOf('clothingSize', OPTIONS.clothingSizes);
+  r.shoeSize = v.number('shoeSize', { min: 18, max: 35, step: 0.5 });
+  r.hairColor = v.oneOf('hairColor', OPTIONS.hairColors);
+  r.tattoo = v.oneOf('tattoo', OPTIONS.yesNo);
+
+  // 面接の希望日時：第1希望は必須、第2〜第4希望は任意。同じ日時の重複は不可
+  var seen = {};
+  INTERVIEW_KEYS.forEach(function (key, i) {
+    r[key] = v.datetime(key, { today: today, optional: i > 0 || opts.interviewOptional });
+    if (r[key] && seen[r[key]]) v.error(key, '第' + seen[r[key]] + '希望と同じ日時です。別の日時を選んでください');
+    if (r[key]) seen[r[key]] = i + 1;
+  });
   r.note = v.text('note', { max: 500, optional: true, multiline: true });
+
+  if (birth && birth.age < 18 && r.timeSlots.split(LIST_SEPARATOR).indexOf(NIGHT_SLOT) >= 0) {
+    v.error('timeSlots', '18歳未満の方は深夜（22〜5時）の勤務はできません');
+  }
 
   v.consent('privacyConsent');
   v.consent('antisocialConsent');
@@ -359,14 +390,6 @@ function validateOnboarding(input, today) {
   }
 
   image('facePhoto');
-
-  r.height = v.number('height', { min: 100, max: 230, step: 1 });
-  r.clothingSize = v.oneOf('clothingSize', OPTIONS.clothingSizes);
-  r.shoeSize = v.number('shoeSize', { min: 18, max: 35, step: 0.5 });
-  r.hairColor = v.oneOf('hairColor', OPTIONS.hairColors);
-  r.tattoo = v.oneOf('tattoo', OPTIONS.yesNo);
-  r.licenses = v.manyOf('licenses', OPTIONS.licenses, { optional: true });
-  r.languages = v.manyOf('languages', OPTIONS.languages, { optional: true });
 
   r.bankName = v.text('bankName', { max: 40 });
   r.branchName = v.text('branchName', { max: 40 });
