@@ -85,7 +85,7 @@
         <div class="field">
           <label for="postalCode">郵便番号<span class="req">必須</span></label>
           <input type="text" id="postalCode" name="postalCode" placeholder="1234567（ハイフンなし）" inputmode="numeric" autocomplete="postal-code" maxlength="8" required>
-          <p class="hint">入力すると住所が自動で入ります。</p>
+          <p class="hint" id="postal-hint" aria-live="polite">入力すると住所が自動で入ります。</p>
         </div>
         <div class="field">
           <label for="prefecture">都道府県<span class="req">必須</span></label>

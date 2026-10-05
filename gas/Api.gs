@@ -21,6 +21,8 @@ var IMAGE_LABELS = {
 
 function handleApi_(body) {
   try {
+    // 郵便番号検索は個人情報を扱わないため、ログイン確認なしで受け付ける（フォームの読み込み前でも使えるように）
+    if (body.action === 'zip') return apiZip_((body.data || {}).zip);
     var userId = verifyIdToken_(body.idToken);
     var data = body.data || {};
     switch (body.action) {
@@ -35,6 +37,22 @@ function handleApi_(body) {
     console.error('api failed', err && err.stack || err);
     return { ok: false, error: '処理中にエラーが発生しました。時間をおいて再度お試しください。' };
   }
+}
+
+/** 郵便番号から住所を調べる（ブラウザから zipcloud に直接つながらないときの予備）。結果は6時間キャッシュ */
+function apiZip_(zip) {
+  zip = String(zip || '').replace(/\D/g, '');
+  if (!/^\d{7}$/.test(zip)) return { ok: false, error: '郵便番号は7桁で入力してください' };
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('zip:' + zip);
+  if (cached) return { ok: true, address: JSON.parse(cached) };
+  var res = UrlFetchApp.fetch('https://zipcloud.ibsnet.co.jp/api/search?zipcode=' + zip, { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) return { ok: false, error: '住所を検索できませんでした' };
+  var r = (JSON.parse(res.getContentText()).results || [])[0];
+  if (!r) return { ok: true, address: null };
+  var address = { prefecture: r.address1, city: r.address2 + r.address3 };
+  cache.put('zip:' + zip, JSON.stringify(address), 21600);
+  return { ok: true, address: address };
 }
 
 /** フォームの初期表示用：選択肢と、登録済みなら入力内容 */

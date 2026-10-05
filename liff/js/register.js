@@ -113,19 +113,33 @@
     });
   }
 
-  // 郵便番号 → 住所の自動入力（未入力の欄だけ埋める）
-  App.$('#postalCode').addEventListener('input', function (e) {
+  // 郵便番号 → 住所の自動入力。市区町村は空欄か、前に自動で入れた内容のときだけ書き換える
+  var zipHint = App.$('#postal-hint');
+  var lastZip = '';
+  var autoCity = '';
+  function onZip(e) {
     var zip = e.target.value.replace(/[０-９]/g, function (c) {
       return String.fromCharCode(c.charCodeAt(0) - 0xFEE0);
     }).replace(/\D/g, '');
-    if (zip.length !== 7) return;
+    if (zip.length !== 7 || zip === lastZip) return;
+    lastZip = zip;
+    zipHint.textContent = '住所を検索しています…';
     App.lookupZip(zip).then(function (addr) {
-      if (!addr) return;
-      App.$('#prefecture').value = addr.address1;
+      if (zip !== lastZip) return; // 検索中に書き換えられた
+      if (!addr) {
+        zipHint.textContent = '住所が見つかりませんでした。郵便番号を確認するか、住所を直接入力してください。';
+        return;
+      }
+      App.$('#prefecture').value = addr.prefecture;
       var city = App.$('#city');
-      if (!city.value) city.value = addr.address2 + addr.address3;
+      if (!city.value || city.value === autoCity) city.value = addr.city;
+      autoCity = addr.city;
+      zipHint.textContent = '住所を入力しました。続きの番地・建物名を入力してください。';
+      saveDraft();
     });
-  });
+  }
+  App.$('#postalCode').addEventListener('input', onZip);
+  App.$('#postalCode').addEventListener('change', onZip); // 自動入力（オートフィル）対策
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();

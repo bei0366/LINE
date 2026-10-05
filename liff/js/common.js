@@ -198,22 +198,37 @@
     return true;
   }
 
-  /** 郵便番号から住所を補完（zipcloud / JSONP） */
-  function lookupZip(zip) {
+  /** zipcloud に直接問い合わせる（JSONP）。失敗・見つからないときは null */
+  function zipcloudJsonp(zip) {
     return new Promise(function (resolve) {
       var cb = 'zip_cb_' + Date.now();
       var script = document.createElement('script');
-      var timer = setTimeout(done, 5000);
+      var timer = setTimeout(function () { done(null); }, 4000);
       function done(result) {
         clearTimeout(timer);
-        delete window[cb];
+        window[cb] = function () {}; // 遅れて返ってきてもエラーにしない
         script.remove();
-        resolve(result && result.results ? result.results[0] : null);
+        var r = result && result.results && result.results[0];
+        resolve(r ? { prefecture: r.address1, city: r.address2 + r.address3 } : null);
       }
       window[cb] = done;
       script.src = 'https://zipcloud.ibsnet.co.jp/api/search?zipcode=' + encodeURIComponent(zip) + '&callback=' + cb;
       script.onerror = function () { done(null); };
       document.head.appendChild(script);
+    });
+  }
+
+  /**
+   * 郵便番号から住所を調べる。{ prefecture, city } か、見つからなければ null。
+   * LINEのアプリ内ブラウザなどで直接の問い合わせが通らないことがあるため、
+   * 失敗したら Apps Script（Googleのサーバー）経由で調べ直す。
+   */
+  function lookupZip(zip) {
+    return zipcloudJsonp(zip).then(function (addr) {
+      if (addr) return addr;
+      return api('zip', { zip: zip })
+        .then(function (res) { return res && res.ok ? res.address : null; })
+        .catch(function () { return null; });
     });
   }
 
