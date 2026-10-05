@@ -99,6 +99,11 @@ test('普通免許は必須、服装は任意（選択肢外は不可）', () =>
   assert.ok(errorsOf(() => validateRegistration(reg({ clothes: ['ジーンズ'] }), TODAY)).clothes);
 });
 
+test('面接日時は30分単位', () => {
+  assert.match(errorsOf(() => validateRegistration(reg({ interview1: '2026-10-12T14:15' }), TODAY)).interview1, /30分単位/);
+  assert.strictEqual(validateRegistration(reg({ interview1: '2026-10-12T14:30' }), TODAY).interview1, '2026/10/12(月) 14:30');
+});
+
 test('面接は第4希望まで。メールは任意。同じ日時の重複は不可', () => {
   const r = validateRegistration(reg({
     email: '', interview2: '2026-10-13T10:00', interview3: '2026-10-14T10:00', interview4: '2026-10-15T18:30'

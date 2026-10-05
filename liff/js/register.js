@@ -8,8 +8,26 @@
   var ready = false;   // LINEログインと登録状況の読み込みが終わったか
   var touched = false; // 読み込み中に入力が始まったか
 
+  // 面接の時刻の選択肢（30分刻み）
+  var INTERVIEW_FIRST_TIME = '09:00';
+  var INTERVIEW_LAST_TIME = '21:00';
+  var INTERVIEW_MAX_DAYS = 90;
+  var WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function addOption(select, value, label) {
+    var o = document.createElement('option');
+    o.value = value;
+    o.textContent = label;
+    select.appendChild(o);
+  }
+  function field(name) { return App.$('[name="' + name + '"]', form); }
+
   // 選択肢はフォームに同梱（js/options.js）しているので、サーバーの応答を待たずにすぐ表示する
   App.renderOptions(form, window.FORM_OPTIONS);
+  setupBirthSelects();
+  setupInterviewSelects();
   setupInterview();
   App.show('screen-form');
   form.addEventListener('input', function () { touched = true; });
@@ -76,6 +94,8 @@
     try {
       var data = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
       if (data) App.fill(form, data);
+      updateBirthDays();
+      syncSelectsFromHidden();
     } catch (e) { /* 読めなければ何もしない */ }
   }
 
@@ -85,7 +105,11 @@
 
   /** onlyEmpty なら、まだ入力されていない欄だけに入れる */
   function fill(data, onlyEmpty) {
-    if (!onlyEmpty) return App.fill(form, data);
+    if (!onlyEmpty) {
+      App.fill(form, data);
+      syncSelectsFromHidden();
+      return;
+    }
     var empty = {};
     Object.keys(data).forEach(function (name) {
       var els = App.$all('[name="' + name + '"]', form);
@@ -95,22 +119,100 @@
       if (!filled) empty[name] = data[name];
     });
     App.fill(form, empty);
+    syncSelectsFromHidden();
+  }
+
+  // ---- 生年月日（年・月・日のプルダウン → 送信用の birthDate） ----
+
+  function setupBirthSelects() {
+    var thisYear = new Date().getFullYear();
+    for (var y = thisYear - 15; y >= thisYear - 80; y--) addOption(field('birthYear'), y, y + '年');
+    for (var m = 1; m <= 12; m++) addOption(field('birthMonth'), m, m + '月');
+    updateBirthDays();
+    ['birthYear', 'birthMonth', 'birthDay'].forEach(function (name) {
+      field(name).addEventListener('change', function () {
+        updateBirthDays();
+        syncBirthDate();
+      });
+    });
+  }
+
+  /** 月（うるう年を含む）に合わせて「日」の選択肢を 28〜31 日にする */
+  function updateBirthDays() {
+    var y = Number(field('birthYear').value) || 2000;
+    var m = Number(field('birthMonth').value) || 1;
+    var last = new Date(y, m, 0).getDate();
+    var daySelect = field('birthDay');
+    var current = daySelect.value;
+    while (daySelect.options.length > 1) daySelect.remove(1);
+    for (var d = 1; d <= last; d++) addOption(daySelect, d, d + '日');
+    daySelect.value = Number(current) <= last ? current : '';
+  }
+
+  function syncBirthDate() {
+    var y = field('birthYear').value, m = field('birthMonth').value, d = field('birthDay').value;
+    field('birthDate').value = y && m && d ? y + '-' + pad(Number(m)) + '-' + pad(Number(d)) : '';
+  }
+
+  // ---- 面接の希望日時（日付・時刻のプルダウン → 送信用の interviewN） ----
+
+  function setupInterviewSelects() {
+    var t = new Date();
+    var first = INTERVIEW_FIRST_TIME.split(':').map(Number);
+    var last = INTERVIEW_LAST_TIME.split(':').map(Number);
+    for (var n = 1; n <= 4; n++) {
+      var dateSelect = field('interview' + n + 'Date');
+      var timeSelect = field('interview' + n + 'Time');
+      for (var i = 1; i <= INTERVIEW_MAX_DAYS; i++) {
+        var d = new Date(t.getFullYear(), t.getMonth(), t.getDate() + i);
+        addOption(dateSelect, ymd(d), (d.getMonth() + 1) + '/' + d.getDate() + '(' + WEEKDAYS[d.getDay()] + ')');
+      }
+      for (var min = first[0] * 60 + first[1]; min <= last[0] * 60 + last[1]; min += 30) {
+        var hhmm = pad(Math.floor(min / 60)) + ':' + pad(min % 60);
+        addOption(timeSelect, hhmm, hhmm);
+      }
+      dateSelect.addEventListener('change', syncInterviews);
+      timeSelect.addEventListener('change', syncInterviews);
+    }
+  }
+
+  function syncInterviews() {
+    for (var n = 1; n <= 4; n++) {
+      var date = field('interview' + n + 'Date').value;
+      var time = field('interview' + n + 'Time').value;
+      field('interview' + n).value = date && time ? date + 'T' + time : '';
+    }
+  }
+
+  /** 第2〜第4希望で、日付と時刻のどちらかだけ選ばれていたらエラー */
+  function interviewPairErrors() {
+    var errors = {};
+    for (var n = 2; n <= 4; n++) {
+      var date = field('interview' + n + 'Date');
+      var time = field('interview' + n + 'Time');
+      if (date.disabled) continue;
+      if (!!date.value !== !!time.value) errors['interview' + n] = '日付と時刻の両方を選んでください';
+    }
+    return errors;
+  }
+
+  /** 登録済みの内容・一時保存から送信用の値が入ったとき、プルダウンにも反映する */
+  function syncSelectsFromHidden() {
+    var b = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(field('birthDate').value);
+    if (b && !field('birthYear').value) {
+      field('birthYear').value = String(Number(b[1]));
+      field('birthMonth').value = String(Number(b[2]));
+      updateBirthDays();
+      field('birthDay').value = String(Number(b[3]));
+    }
+    syncBirthDate();
   }
 
   /** 面接の希望日時は新規登録のときだけ聞く（変更時は担当者と調整済みのため） */
   function setupInterview() {
     var section = App.$('#interview-section');
     section.hidden = isEdit;
-    var t = new Date();
-    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
-    var day = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
-    var min = day(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1)) + 'T00:00';
-    var max = day(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 90)) + 'T23:59';
-    App.$all('input', section).forEach(function (input) {
-      input.disabled = isEdit;
-      input.min = min;
-      input.max = max;
-    });
+    App.$all('input, select', section).forEach(function (el) { el.disabled = isEdit; });
   }
 
   // 郵便番号 → 住所の自動入力。市区町村は空欄か、前に自動で入れた内容のときだけ書き換える
@@ -144,7 +246,11 @@
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     if (!ready) return;
+    syncBirthDate();
+    syncInterviews();
     if (!App.validate(form)) return;
+    var pairErrors = interviewPairErrors();
+    if (Object.keys(pairErrors).length) return App.showErrors(form, pairErrors);
     App.busy(submit, true);
     App.api('register', App.collect(form))
       .then(function (res) {

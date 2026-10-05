@@ -60,9 +60,14 @@
             <input type="text" name="firstNameKana" placeholder="メイ（例：ハナコ）" maxlength="30" required>
           </div>
         </div>
-        <div class="field">
-          <label for="birthDate">生年月日<span class="req">必須</span></label>
-          <input type="date" id="birthDate" name="birthDate" autocomplete="bday" required>
+        <div class="field" data-field="birthDate">
+          <div class="label">生年月日<span class="req">必須</span></div>
+          <div class="row">
+            <select name="birthYear" aria-label="生まれた年" required data-message="年を選んでください"><option value="">年</option></select>
+            <select name="birthMonth" aria-label="生まれた月" required data-message="月を選んでください"><option value="">月</option></select>
+            <select name="birthDay" aria-label="生まれた日" required data-message="日を選んでください"><option value="">日</option></select>
+          </div>
+          <input type="hidden" name="birthDate">
         </div>
         <div class="field" data-field="gender">
           <div class="label">性別<span class="req">必須</span></div>
@@ -182,22 +187,38 @@
 
       <section class="card" id="interview-section" hidden>
         <h2>面接のご希望日時</h2>
-        <p class="hint" style="margin:0 0 12px">第4希望まで選べます。候補が多いほど早く日程が決まります。担当者が調整のうえ、確定した日時をLINEでご連絡します。</p>
-        <div class="field">
-          <label for="interview1">第1希望<span class="req">必須</span></label>
-          <input type="datetime-local" id="interview1" name="interview1" required>
+        <p class="hint" style="margin:0 0 12px">9:00〜21:00の間で、30分単位で選べます。第4希望まで選べます。候補が多いほど早く日程が決まります。担当者が調整のうえ、確定した日時をLINEでご連絡します。</p>
+        <div class="field" data-field="interview1">
+          <div class="label">第1希望<span class="req">必須</span></div>
+          <div class="row">
+            <select name="interview1Date" aria-label="第1希望の日付" required data-message="日付を選んでください"><option value="">日付</option></select>
+            <select name="interview1Time" aria-label="第1希望の時刻" required data-message="時刻を選んでください"><option value="">時刻</option></select>
+          </div>
+          <input type="hidden" name="interview1">
         </div>
-        <div class="field">
-          <label for="interview2">第2希望<span class="opt">任意</span></label>
-          <input type="datetime-local" id="interview2" name="interview2">
+        <div class="field" data-field="interview2">
+          <div class="label">第2希望<span class="opt">任意</span></div>
+          <div class="row">
+            <select name="interview2Date" aria-label="第2希望の日付"><option value="">日付</option></select>
+            <select name="interview2Time" aria-label="第2希望の時刻"><option value="">時刻</option></select>
+          </div>
+          <input type="hidden" name="interview2">
         </div>
-        <div class="field">
-          <label for="interview3">第3希望<span class="opt">任意</span></label>
-          <input type="datetime-local" id="interview3" name="interview3">
+        <div class="field" data-field="interview3">
+          <div class="label">第3希望<span class="opt">任意</span></div>
+          <div class="row">
+            <select name="interview3Date" aria-label="第3希望の日付"><option value="">日付</option></select>
+            <select name="interview3Time" aria-label="第3希望の時刻"><option value="">時刻</option></select>
+          </div>
+          <input type="hidden" name="interview3">
         </div>
-        <div class="field">
-          <label for="interview4">第4希望<span class="opt">任意</span></label>
-          <input type="datetime-local" id="interview4" name="interview4">
+        <div class="field" data-field="interview4">
+          <div class="label">第4希望<span class="opt">任意</span></div>
+          <div class="row">
+            <select name="interview4Date" aria-label="第4希望の日付"><option value="">日付</option></select>
+            <select name="interview4Time" aria-label="第4希望の時刻"><option value="">時刻</option></select>
+          </div>
+          <input type="hidden" name="interview4">
         </div>
       </section>
 
