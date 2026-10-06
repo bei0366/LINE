@@ -66,7 +66,7 @@ function checkSettings() {
   // 4. シート・トリガー
   try {
     var ss = SpreadsheetApp.openById(props.SPREADSHEET_ID);
-    [REG_SHEET, ONB_SHEET, CHAT_SHEET].forEach(function (name) {
+    [REG_SHEET, ONB_SHEET, CHAT_SHEET, JOB_SHEET, APPLY_SHEET, IMPORT_SHEET].forEach(function (name) {
       var sh = ss.getSheetByName(name);
       if (!sh) return ng('シート「' + name + '」がありません。setup を実行してください');
       var header = headerMap_(sh);
@@ -91,6 +91,17 @@ function checkSettings() {
     ng('CALL_URL の形式が違います（https:// で始まるURLを、前後の空白なしで入れてください）。わからない場合は CALL_URL を削除しても動きます。現在：' + callUrl);
   } else {
     ok('CALL_URL（LINEコールの通話用URL）は設定済み：' + callUrl);
+  }
+
+  var apiKey = (props.ANTHROPIC_API_KEY || '').trim();
+  if (!apiKey) {
+    warn('ANTHROPIC_API_KEY が未設定です。案件の取り込み（AIでの読み取り）を使うには、Claude の APIキーを入れてください');
+  } else {
+    var models = UrlFetchApp.fetch('https://api.anthropic.com/v1/models?limit=1', {
+      headers: { 'x-api-key': apiKey, 'anthropic-version': ANTHROPIC_VERSION }, muteHttpExceptions: true
+    });
+    if (models.getResponseCode() === 200) ok('ANTHROPIC_API_KEY（Claude の APIキー）は有効です');
+    else ng('ANTHROPIC_API_KEY が無効です（' + models.getResponseCode() + '）。Claude Console で発行した APIキー全体を、前後の空白なしで入れてください');
   }
 
   // 5. デプロイ済みのウェブアプリが最新のコードか

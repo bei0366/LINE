@@ -93,6 +93,7 @@ function onPostback_(ev, userId) {
     if (i > 0) params[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1));
   });
   if (params.iv) onInterviewPostback_(ev, userId, params);
+  if (params.job) onJobPostback_(ev, userId, params);
 }
 
 /** スタンプや画像など */

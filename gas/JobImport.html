@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root { --brand: #381E19; --line: #ddd; --muted: #777; --bg: #faf7f5; --err: #c62828; }
+  * { box-sizing: border-box; }
+  body { font-family: "Hiragino Sans", "Noto Sans JP", sans-serif; font-size: 13px; margin: 0; padding: 12px 16px 80px; color: #222; }
+  h2 { font-size: 14px; margin: 16px 0 8px; color: var(--brand); }
+  label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  input, select, textarea { width: 100%; font: inherit; padding: 5px 6px; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+  textarea { resize: vertical; }
+  #text { height: 220px; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; min-width: 0; }
+  .w2 { flex: 2; } .w3 { flex: 3; }
+  button { font: inherit; padding: 7px 16px; border-radius: 4px; border: 1px solid var(--brand); background: #fff; color: var(--brand); cursor: pointer; }
+  button.primary { background: var(--brand); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.small { padding: 2px 8px; font-size: 11px; }
+  .card { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; background: var(--bg); }
+  .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .card-head strong { color: var(--brand); }
+  .card .row { margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 6px; background: #fff; }
+  th, td { border: 1px solid var(--line); padding: 3px 4px; text-align: left; }
+  th { font-size: 11px; color: var(--muted); font-weight: normal; background: #f3f3f3; }
+  td input { border: none; padding: 3px; }
+  td button.small { white-space: nowrap; }
+  .msg { margin: 8px 0; padding: 8px 10px; border-radius: 4px; display: none; white-space: pre-wrap; }
+  .msg.err { display: block; background: #fdecea; color: var(--err); }
+  .msg.info { display: block; background: #eef6ee; color: #2e7d32; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px; background: #fff; border-top: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
+  .hint { color: var(--muted); font-size: 11px; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid #ccc; border-top-color: var(--brand); border-radius: 50%; animation: s 1s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes s { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div>
+      <label for="client">取引先名（全案件に入ります）</label>
+      <input id="client" list="clients" placeholder="例：〇〇企画">
+      <datalist id="clients"></datalist>
+    </div>
+    <div class="w3 hint" style="align-self:flex-end">お客様から届いた文章をそのまま貼り付けて「読み取る」を押してください。複数の案件が入っていてもまとめて読み取ります。</div>
+  </div>
+  <div style="margin-top:8px">
+    <label for="text">依頼文</label>
+    <textarea id="text" placeholder="ここに貼り付け"></textarea>
+  </div>
+  <div style="margin-top:8px"><button id="parse" class="primary">読み取る</button> <span id="status" class="hint"></span></div>
+  <div id="msg" class="msg"></div>
+
+  <div id="result" style="display:none">
+    <h2>読み取り結果（直してから追加できます）</h2>
+    <div class="hint">空欄は依頼文に書かれていなかった項目です。売上・総支払額・実働時間・曜日・計上月はシートに追加するときに計算します。</div>
+    <div id="cases" style="margin-top:8px"></div>
+  </div>
+
+  <div class="bar">
+    <button id="save" class="primary" disabled>シート「案件一覧」に追加</button>
+    <button onclick="google.script.host.close()">閉じる</button>
+    <span id="saveStatus" class="hint"></span>
+  </div>
+
+<script>
+var PAY_BASIS = ['拘束時間', '実働時間', '日給', '記載なし'];
+var GENDER = ['男女可', '男性のみ', '女性のみ', '記載なし'];
+var cases = [];
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function showMsg(text, kind) { var m = $('msg'); m.textContent = text; m.className = 'msg ' + (kind || 'err'); }
+function clearMsg() { $('msg').className = 'msg'; }
+// シートの「2026/10/08」⇔ 入力欄の「2026-10-08」
+function toInputDate(s) { return String(s || '').replace(/\//g, '-'); }
+
+google.script.run.withSuccessHandler(function (r) {
+  $('clients').innerHTML = r.clients.map(function (c) { return '<option value="' + esc(c) + '">'; }).join('');
+}).jobImportInit();
+
+$('parse').onclick = function () {
+  var text = $('text').value.trim();
+  if (!text) return showMsg('依頼文を貼り付けてください');
+  clearMsg();
+  $('parse').disabled = true;
+  $('save').disabled = true;
+  $('status').innerHTML = '<span class="spin"></span>AIが読み取っています（20〜60秒ほどかかります）';
+  google.script.run.withSuccessHandler(function (r) {
+    $('parse').disabled = false;
+    $('status').textContent = r.cases.length + '件の案件を読み取りました';
+    cases = r.cases;
+    if (!$('client').value.trim()) {
+      var found = cases.map(function (c) { return c.client; }).filter(Boolean)[0];
+      if (found) $('client').value = found;
+    }
+    render();
+  }).withFailureHandler(function (e) {
+    $('parse').disabled = false;
+    $('status').textContent = '';
+    showMsg(e.message);
+  }).parseJobText(text);
+};
+
+function field(ci, key, label, cls, type) {
+  var v = cases[ci][key];
+  if (type === 'textarea') {
+    return '<div class="' + (cls || '') + '"><label>' + label + '</label><textarea rows="2" data-c="' + ci + '" data-k="' + key + '">' + esc(v) + '</textarea></div>';
+  }
+  return '<div class="' + (cls || '') + '"><label>' + label + '</label><input type="' + (type || 'text') + '" data-c="' + ci + '" data-k="' + key + '" value="' + esc(v) + '"></div>';
+}
+
+function select(ci, key, label, options) {
+  return '<div><label>' + label + '</label><select data-c="' + ci + '" data-k="' + key + '">' + options.map(function (o) {
+    return '<option' + (cases[ci][key] === o ? ' selected' : '') + '>' + o + '</option>';
+  }).join('') + '</select></div>';
+}
+
+function render() {
+  $('result').style.display = cases.length ? 'block' : 'none';
+  $('save').disabled = !cases.length;
+  $('cases').innerHTML = cases.map(function (c, ci) {
+    var shifts = c.shifts.map(function (s, si) {
+      var cell = function (key, type, extra) {
+        var v = key === 'date' ? toInputDate(s[key]) : s[key];
+        return '<td><input type="' + type + '" data-c="' + ci + '" data-s="' + si + '" data-k="' + key + '" value="' + esc(v) + '"' + (extra || '') + '></td>';
+      };
+      return '<tr>' + cell('date', 'date') +
+        '<td style="text-align:center"><input type="checkbox" data-c="' + ci + '" data-s="' + si + '" data-k="holiday"' + (s.holiday ? ' checked' : '') + '></td>' +
+        cell('start', 'time') + cell('end', 'time') + cell('breakHours', 'number', ' step="0.25" min="0"') +
+        cell('headcount', 'number', ' min="0"') + cell('note', 'text') +
+        '<td><button class="small" data-del-shift="' + ci + ':' + si + '">削除</button></td></tr>';
+    }).join('');
+    return '<div class="card">' +
+      '<div class="card-head"><strong>案件' + (ci + 1) + '</strong><button class="small" data-del-case="' + ci + '">この案件を追加しない</button></div>' +
+      '<div class="row">' + field(ci, 'title', 'タイトル', 'w2') + field(ci, 'place', '場所') + field(ci, 'prefecture', '都道府県') + field(ci, 'position', 'ポジション', 'w2') + '</div>' +
+      '<div class="row">' + field(ci, 'address', '住所・アクセス', 'w3') + field(ci, 'contact', '現場連絡先', 'w2') + '</div>' +
+      '<div class="row">' + field(ci, 'meetingTime', '集合時間') + field(ci, 'meetingPlace', '集合場所', 'w2') + field(ci, 'conditions', '募集条件', 'w2') + select(ci, 'genderReq', '性別', GENDER) + '</div>' +
+      '<div class="row">' + field(ci, 'dress', '服装', 'w2', 'textarea') + field(ci, 'belongings', '持ち物', '', 'textarea') + field(ci, 'notes', '備考', 'w2', 'textarea') + '</div>' +
+      '<div class="row">' + select(ci, 'payBasis', '支払い', PAY_BASIS) + field(ci, 'unitPrice', '単価（円）', '', 'number') + field(ci, 'minHours', '保証時間', '', 'number') +
+        field(ci, 'transport', '交通費（円/人）', '', 'number') + field(ci, 'transportNote', '交通費の区間など', 'w2') +
+        field(ci, 'mealFee', '食費（円/人）', '', 'number') + field(ci, 'mealNote', '食事（金額以外）') + '</div>' +
+      '<table><thead><tr><th style="width:130px">日程</th><th style="width:32px">祝</th><th style="width:90px">開始</th><th style="width:90px">終了</th><th style="width:70px">休憩(h)</th><th style="width:60px">人数</th><th>メモ</th><th style="width:60px"></th></tr></thead>' +
+      '<tbody>' + shifts + '</tbody></table>' +
+      '<div style="margin-top:6px"><button class="small" data-add-shift="' + ci + '">＋ 日程を追加</button></div>' +
+      '</div>';
+  }).join('');
+}
+
+// 入力をそのまま cases に反映する
+document.addEventListener('input', function (e) { sync(e.target); });
+document.addEventListener('change', function (e) { sync(e.target); });
+function sync(el) {
+  if (!el.dataset || el.dataset.c === undefined) return;
+  var c = cases[+el.dataset.c];
+  var obj = el.dataset.s !== undefined ? c.shifts[+el.dataset.s] : c;
+  var k = el.dataset.k;
+  if (el.type === 'checkbox') obj[k] = el.checked;
+  else if (el.type === 'number') obj[k] = el.value === '' ? null : Number(el.value);
+  else if (k === 'date') obj[k] = el.value.replace(/-/g, '/');
+  else obj[k] = el.value;
+}
+
+document.addEventListener('click', function (e) {
+  var d = e.target.dataset || {};
+  if (d.delCase !== undefined) { cases.splice(+d.delCase, 1); render(); }
+  if (d.delShift !== undefined) { var p = d.delShift.split(':'); cases[+p[0]].shifts.splice(+p[1], 1); render(); }
+  if (d.addShift !== undefined) {
+    var list = cases[+d.addShift].shifts;
+    var last = list[list.length - 1] || {};
+    list.push({ date: '', holiday: false, start: last.start || '', end: last.end || '', breakHours: last.breakHours == null ? null : last.breakHours, headcount: last.headcount == null ? null : last.headcount, note: '' });
+    render();
+  }
+});
+
+$('save').onclick = function () {
+  var missing = [];
+  cases.forEach(function (c, i) {
+    if (!c.title) missing.push('案件' + (i + 1) + 'のタイトル');
+    c.shifts.forEach(function (s) { if (!s.date) missing.push('案件' + (i + 1) + 'の日程'); });
+  });
+  if (missing.length) return showMsg('入力してください：' + missing.filter(function (m, i, a) { return a.indexOf(m) === i; }).join('、'));
+  clearMsg();
+  $('save').disabled = true;
+  $('saveStatus').innerHTML = '<span class="spin"></span>追加しています';
+  var payload = { client: $('client').value.trim(), text: $('text').value, cases: cases.map(function (c) { var x = Object.assign({}, c); x.client = ''; return x; }) };
+  google.script.run.withSuccessHandler(function (r) {
+    $('saveStatus').textContent = '';
+    showMsg(r.cases + '件の案件（' + r.rows + '行）を「案件一覧」に追加しました。続けて別の依頼文を貼り付けられます。', 'info');
+    cases = [];
+    $('text').value = '';
+    $('status').textContent = '';
+    render();
+  }).withFailureHandler(function (e) {
+    $('save').disabled = false;
+    $('saveStatus').textContent = '';
+    showMsg(e.message);
+  }).saveJobs(payload);
+};
+</script>
+</body>
+</html>

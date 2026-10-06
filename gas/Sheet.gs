@@ -9,6 +9,9 @@ var ONB_SHEET = '労務情報';
 var CHAT_SHEET = '登録途中'; // チャットで回答中の人（途中でやめた人もここに残る）
 var LOG_SHEET = 'エラーログ'; // フォーム・LINE・自動送信で起きたエラー（新しいものが下）
 var LOG_MAX_ROWS = 1000;
+var JOB_SHEET = '案件一覧';   // お客様からの案件（Jobs.gs）
+var APPLY_SHEET = '案件応募'; // LINE で配信した案件への応募
+var IMPORT_SHEET = '案件取込履歴';
 
 var STATUS = {
   PRE: '仮登録',                    // フォーム送信済み。書類選考待ち
@@ -123,6 +126,81 @@ COLUMNS[CHAT_SHEET] = [
   ['startedAt', '開始日時'],
   ['updatedAt', '最終更新日時']
 ];
+
+// 「案件一覧」の列。前半21列はこれまで使っていた案件表と同じ並び。
+COLUMNS[JOB_SHEET] = [
+  ['client', '取引先名'],
+  ['title', 'タイトル'],
+  ['place', '場所'],
+  ['position', 'ポジション'],
+  ['date', '日程'],
+  ['start', '開始時間'],
+  ['end', '終了時間'],
+  ['weekday', '曜日'],
+  ['breakHours', '休憩時間'],
+  ['workHours', '実働時間'],
+  ['dress', '服装　持ち物'],
+  ['payBasis', '支払い'],
+  ['unit', '単位'],
+  ['unitPrice', '単価'],
+  ['sales', '売上'],
+  ['transport', '交通費'],
+  ['meal', '食費'],
+  ['total', '総支払額'],
+  ['invoice', '請求書'],
+  ['salesMonth', '売上計上月'],
+  ['paymentMonth', '入金予定月'],
+  // ---- ここから追加の列 ----
+  ['headcount', '人数'],
+  ['conditions', '募集条件'],
+  ['meetingTime', '集合時間'],
+  ['meetingPlace', '集合場所'],
+  ['address', '住所・アクセス'],
+  ['contact', '現場連絡先'],
+  ['notes', '備考'],
+  ['staffPay', 'スタッフ向け給与'],
+  ['staffTransport', 'スタッフ向け交通費'],
+  ['recruit', '募集状況'],
+  ['sentAt', '配信日時'],
+  ['sentCount', '配信人数'],
+  ['applied', '応募人数'],
+  ['prefecture', '都道府県'],
+  ['genderReq', '性別'],
+  ['caseId', '案件ID'],
+  ['slotId', '枠ID'],
+  ['importId', '取込ID']
+];
+
+COLUMNS[APPLY_SHEET] = [
+  ['appliedAt', '応募日時'],
+  ['status', '状態'],
+  ['slotId', '枠ID'],
+  ['caseId', '案件ID'],
+  ['title', 'タイトル'],
+  ['date', '日程'],
+  ['time', '時間'],
+  ['name', '氏名'],
+  ['phone', '電話番号'],
+  ['userId', 'LINEユーザーID'],
+  ['notifiedAt', '結果の通知日時'],
+  ['adminMemo', '管理メモ']
+];
+
+COLUMNS[IMPORT_SHEET] = [
+  ['importId', '取込ID'],
+  ['at', '取込日時'],
+  ['client', '取引先名'],
+  ['cases', '案件数'],
+  ['rows', '行数'],
+  ['text', '原文']
+];
+
+/**
+ * 書式なしテキストにする列（指定がないシートはすべての列）。
+ * 日付・時刻は Sheets が自動で日時に変換すると読み戻すときにずれるため、文字のまま保存する。
+ */
+var TEXT_COLUMNS = {};
+TEXT_COLUMNS[JOB_SHEET] = ['日程', '開始時間', '終了時間', '曜日', '売上計上月', '入金予定月', '集合時間', '現場連絡先', '配信日時', '案件ID', '枠ID', '取込ID'];
 
 var spreadsheetCache_ = null;
 
@@ -292,7 +370,16 @@ function ensureSheet_(ss, name) {
   sh.setFrozenRows(1);
   sh.setFrozenColumns(2);
   sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight('bold').setBackground('#f3e5f5');
-  // 電話番号・口座番号の先頭の0が消えないよう、すべて書式なしテキストにする
-  sh.getRange(2, 1, sh.getMaxRows() - 1, sh.getLastColumn()).setNumberFormat('@');
+  var textCols = TEXT_COLUMNS[name];
+  if (textCols) {
+    // 金額や時間を計算できるよう、日付・時刻・IDの列だけを書式なしテキストにする
+    var header = headerMap_(sh);
+    textCols.forEach(function (label) {
+      sh.getRange(2, header[label] + 1, sh.getMaxRows() - 1, 1).setNumberFormat('@');
+    });
+  } else {
+    // 電話番号・口座番号の先頭の0が消えないよう、すべて書式なしテキストにする
+    sh.getRange(2, 1, sh.getMaxRows() - 1, sh.getLastColumn()).setNumberFormat('@');
+  }
   return sh;
 }

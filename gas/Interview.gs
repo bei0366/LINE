@@ -295,6 +295,9 @@ function pendingNotices_(now) {
 /** スプレッドシートを開いたときに「セブンハーツ」メニューを出す（シンプルトリガー） */
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('セブンハーツ')
+    .addItem('案件を取り込む（依頼文から）', 'showJobImport')
+    .addItem('案件をLINEで配信', 'showJobSend')
+    .addSeparator()
     .addItem('不採用通知の送信予定を確認', 'showPendingNotices')
     .addItem('不採用通知を今すぐ送る', 'sendRejectionsNow')
     .addToUi();

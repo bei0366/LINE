@@ -11,6 +11,9 @@
 /** 個人情報の取り扱いページ（liff/privacy.html）。別のページを使う場合はスクリプト プロパティ PRIVACY_POLICY_URL で上書き */
 var DEFAULT_PRIVACY_POLICY_URL = 'https://bei0366.github.io/LINE/liff/privacy.html';
 
+/** 案件の読み取りに使う Claude のモデル。スクリプト プロパティ CLAUDE_MODEL で変更できる */
+var DEFAULT_CLAUDE_MODEL = 'claude-opus-5-5';
+
 function getConfig_() {
   var p = PropertiesService.getScriptProperties().getProperties();
   return {
@@ -22,7 +25,11 @@ function getConfig_() {
     driveFolderId: p.DRIVE_FOLDER_ID,
     adminEmail: p.ADMIN_EMAIL || '',
     privacyPolicyUrl: p.PRIVACY_POLICY_URL || DEFAULT_PRIVACY_POLICY_URL,
-    callUrl: (p.CALL_URL || '').trim()
+    callUrl: (p.CALL_URL || '').trim(),
+    anthropicApiKey: (p.ANTHROPIC_API_KEY || '').trim(),
+    claudeModel: (p.CLAUDE_MODEL || '').trim() || DEFAULT_CLAUDE_MODEL,
+    // 入金予定月 = 売上計上月の何か月後か（取引先ごとに違う場合はシートで直してください）
+    paymentMonthsAfter: /^\d+$/.test((p.PAYMENT_MONTHS_AFTER || '').trim()) ? +p.PAYMENT_MONTHS_AFTER.trim() : 1
   };
 }
 
@@ -57,7 +64,7 @@ function doPost(e) {
  * コードの版。コードを変えるたびに更新する。
  * checkSettings がウェブアプリ（デプロイ済み）の版と比べて、デプロイし忘れを見つける。
  */
-var APP_VERSION = '2026-10-05.11';
+var APP_VERSION = '2026-10-06.1';
 
 function doGet() {
   return json_({ ok: true, service: 'sevenhearts-staff-registration', version: APP_VERSION });
@@ -94,6 +101,7 @@ function setup() {
   ensureSheet_(ss, ONB_SHEET);
   ensureSheet_(ss, CHAT_SHEET);
   ensureSheet_(ss, LOG_SHEET);
+  setupJobSheets_(ss);
 
   var statusCol = headerMap_(reg)['ステータス'] + 1;
   var values = Object.keys(STATUS).map(function (k) { return STATUS[k]; });
@@ -137,9 +145,11 @@ function setup() {
  * - 書類落選 → すぐに不採用通知を送る
  * - 不採用 → 変更時刻を記録（通知は runScheduler が翌日の午前10時に送る）
  * - 採用 → 書類提出の案内を送って「書類依頼済」に
+ * シート「案件応募」の「状態」を変えたときは onApplyEdit_（JobsApp.gs）で確定・見送りの連絡を送る。
  */
 function onStatusEdit(e) {
   var sh = e.range.getSheet();
+  if (sh.getName() === APPLY_SHEET) return onApplyEdit_(e);
   if (sh.getName() !== REG_SHEET) return;
   var header = headerMap_(sh);
   var statusCol = header['ステータス'] + 1;
