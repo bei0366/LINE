@@ -1,8 +1,9 @@
 /**
- * 案件の取り込みと LINE 配信（シート・LINE・Claude とのやりとり）。
+ * 案件の取り込みと LINE 配信（シート・LINE・AI とのやりとり）。
+ * 読み取りに使う AI は Gemini（無料枠あり）か Claude。スクリプト プロパティで切り替える（getConfig_ の aiProvider）。
  * 判定や文面は Jobs.gs、画面は JobImport.html / JobSend.html。
  *
- * - メニュー「セブンハーツ > 案件を取り込む」：依頼文を貼り付け → Claude が読み取り → 確認・修正 → 「案件一覧」に追加
+ * - メニュー「セブンハーツ > 案件を取り込む」：依頼文を貼り付け → AI が読み取り → 確認・修正 → 「案件一覧」に追加
  * - メニュー「セブンハーツ > 案件をLINEで配信」：案件を選ぶ → 条件に合うスタッフに一斉送信（応募ボタン付き）
  * - スタッフが応募ボタンを押す → 「案件応募」に追加（onJobPostback_）
  * - 「案件応募」の状態を「確定」「見送り」にする → 本人に LINE で連絡（onApplyEdit_）
@@ -182,6 +183,103 @@ function askClaude_(text, asks) {
   return results.map(function (r) { return r.data; });
 }
 
+// ---- Gemini ----
+
+var GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
+
+function geminiRequest_(cfg, text, withSchema) {
+  var instruction = jobAllPrompt_();
+  var gen = { responseMimeType: 'application/json', maxOutputTokens: 32768 };
+  if (withSchema) gen.responseJsonSchema = JOB_ALL_SCHEMA;
+  else instruction += '\n\n次の JSON Schema に従った JSON だけを返してください：\n' + JSON.stringify(JOB_ALL_SCHEMA);
+  return {
+    url: GEMINI_URL + encodeURIComponent(cfg.geminiModel) + ':generateContent',
+    options: {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      headers: { 'x-goog-api-key': cfg.geminiApiKey },
+      payload: JSON.stringify({
+        systemInstruction: { parts: [{ text: jobSystemPrompt_(new Date()) }] },
+        contents: [{ role: 'user', parts: [{ text: '<依頼文>\n' + text + '\n</依頼文>' }, { text: instruction }] }],
+        generationConfig: gen
+      })
+    }
+  };
+}
+
+/** Gemini の応答 → { data } または { error, retry, waitMs, noSchema } */
+function geminiResult_(res, model) {
+  var code = res.getResponseCode();
+  var body;
+  try {
+    body = JSON.parse(res.getContentText());
+  } catch (e) {
+    return { error: 'AIからの応答を読めませんでした（' + code + '）', retry: true };
+  }
+  if (code !== 200) {
+    var err = (body && body.error) || {};
+    var msg = err.message || '';
+    if (/API key not valid|API_KEY_INVALID/i.test(msg + JSON.stringify(err.details || ''))) {
+      return { error: 'Gemini の APIキー（GEMINI_API_KEY）が正しくありません' };
+    }
+    if (code === 400 && /response_?json_?schema|schema/i.test(msg)) return { error: msg, noSchema: true };
+    if (code === 403) return { error: 'Gemini の APIキーに使う権限がありません（' + msg + '）' };
+    if (code === 404) return { error: 'Gemini のモデル「' + model + '」が見つかりません。スクリプト プロパティ GEMINI_MODEL を確認してください' };
+    if (code === 429) {
+      if (/per ?day|PerDay|daily/i.test(msg + JSON.stringify(err.details || ''))) {
+        return { error: 'Gemini の今日の無料枠を使い切りました。明日になると使えます（お急ぎの場合は README の「AIの切り替え」を参照）' };
+      }
+      // 1分あたりの上限：指定された時間だけ待ってやり直す
+      var wait = 20000;
+      (err.details || []).forEach(function (d) {
+        var m = /^(\d+(?:\.\d+)?)s$/.exec(d.retryDelay || '');
+        if (m) wait = Math.ceil(+m[1] * 1000);
+      });
+      return { error: 'Gemini の1分あたりの上限に達しました。1分ほど待ってからもう一度お試しください', retry: true, waitMs: Math.min(wait, 50000) };
+    }
+    if (code >= 500) return { error: 'AIが混み合っています（' + code + '）', retry: true };
+    return { error: 'AIでの読み取りに失敗しました（' + code + '）：' + msg };
+  }
+  if (body.promptFeedback && body.promptFeedback.blockReason) return { error: 'AIがこの文章の読み取りを断りました。内容を確認してください' };
+  var cand = body.candidates && body.candidates[0];
+  if (!cand) return { error: 'AIからの応答が空でした', retry: true };
+  if (cand.finishReason === 'MAX_TOKENS') return { error: '文章が長すぎて読み取りきれませんでした。案件を分けて貼り付けてください' };
+  if (cand.finishReason && cand.finishReason !== 'STOP') return { error: 'AIがこの文章の読み取りを断りました（' + cand.finishReason + '）' };
+  var text = ((cand.content && cand.content.parts) || []).filter(function (p) { return p.text && !p.thought; })
+    .map(function (p) { return p.text; }).join('').trim()
+    .replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+  try {
+    return { data: JSON.parse(text) };
+  } catch (e) {
+    return { error: 'AIからの応答を読めませんでした', retry: true };
+  }
+}
+
+/**
+ * Gemini で依頼文の案件をすべて読む（1回の問い合わせ。無料枠は1日の回数が少ないため）。
+ * 混雑・1分あたりの上限のときは待ってやり直す。JSON Schema の指定を受け付けないモデルなら、指示文で形を伝える。
+ */
+function askGemini_(text) {
+  var cfg = getConfig_();
+  if (!cfg.geminiApiKey) throw new Error('Gemini の APIキーが未設定です。スクリプト プロパティ GEMINI_API_KEY を設定してください（README参照）');
+  var withSchema = true;
+  var r = null;
+  for (var attempt = 0; attempt < 3; attempt++) {
+    if (r && r.retry) Utilities.sleep(r.waitMs || 3000);
+    var req = geminiRequest_(cfg, text, withSchema);
+    var res;
+    try {
+      res = UrlFetchApp.fetch(req.url, req.options);
+    } catch (err) {
+      throw new Error('AIの応答に時間がかかりすぎました。案件をいくつかに分けて貼り付けてください（' + err.message + '）');
+    }
+    r = geminiResult_(res, cfg.geminiModel);
+    if (r.data) return r.data;
+    if (r.noSchema && withSchema) { withSchema = false; r = { retry: true, waitMs: 1 }; continue; }
+    if (!r.retry) break;
+  }
+  throw new Error(r.error);
+}
+
 // ---- 案件の取り込み（JobImport.html から呼ぶ） ----
 
 function showJobImport() {
@@ -202,6 +300,12 @@ function parseJobText(text) {
   text = String(text || '').trim();
   if (!text) throw new Error('依頼文を貼り付けてください');
   if (text.length > 30000) throw new Error('文章が長すぎます。案件をいくつかに分けて貼り付けてください');
+
+  if (getConfig_().aiProvider === 'gemini') {
+    var all = (askGemini_(text).cases || []).filter(function (c) { return c && typeof c === 'object'; });
+    if (!all.length) throw new Error('案件を読み取れませんでした。日程や場所が書かれた依頼文か確認してください');
+    return { cases: all.map(normalizeCase_) };
+  }
 
   // 1回目：どんな案件が含まれているか（短い応答なのですぐ終わる）
   var list = askClaude_(text, [{ instruction: jobListPrompt_(), schema: JOB_LIST_SCHEMA, maxTokens: 4000 }])[0];

@@ -294,3 +294,87 @@ test('読み取り：APIキーの誤り・断られた・長すぎる', () => {
   assert.throws(() => claudeCtx(() => [200, { stop_reason: 'max_tokens', content: [] }]).c.parseJobText('x'), /分けて/);
   assert.throws(() => claudeCtx(() => okText({})).c.parseJobText('   '), /貼り付けてください/);
 });
+
+// ---- Gemini（無料枠）での読み取り ----
+
+function geminiCtx(responder, props) {
+  const calls = [];
+  const sleeps = [];
+  const c = vm.createContext({
+    PropertiesService: { getScriptProperties: () => ({ getProperties: () => Object.assign({ GEMINI_API_KEY: 'g-test', ANTHROPIC_API_KEY: '' }, props) }) },
+    Utilities: { sleep: (ms) => sleeps.push(ms) },
+    UrlFetchApp: {
+      fetch: (url, opt) => {
+        assert.strictEqual(opt.url, undefined);
+        const body = JSON.parse(opt.payload);
+        calls.push({ url, headers: opt.headers, body });
+        const [code, json] = responder(body, calls.length);
+        return { getResponseCode: () => code, getContentText: () => JSON.stringify(json) };
+      },
+      fetchAll: () => { throw new Error('Gemini では fetchAll を使わない'); }
+    }
+  });
+  for (const f of ['Options.gs', 'Validation.gs', 'Line.gs', 'Sheet.gs', 'Interview.gs', 'Code.gs', 'Jobs.gs', 'JobsApp.gs']) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'gas', f), 'utf8'), c, { filename: f });
+  }
+  return { c, calls, sleeps };
+}
+
+const gemOk = (obj, raw) => [200, { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '考え中', thought: true }, { text: raw || JSON.stringify(obj) }] } }] }];
+
+test('使う AI：AI_PROVIDER がなければ APIキーが入っているほう', () => {
+  const { c } = geminiCtx(() => gemOk({}));
+  assert.strictEqual(c.aiProvider_({ GEMINI_API_KEY: 'x' }), 'gemini');
+  assert.strictEqual(c.aiProvider_({ ANTHROPIC_API_KEY: 'x' }), 'claude');
+  assert.strictEqual(c.aiProvider_({ GEMINI_API_KEY: 'x', AI_PROVIDER: 'Claude' }), 'claude');
+  assert.strictEqual(c.aiProvider_({}), 'claude');
+});
+
+test('Gemini：1回の問い合わせですべての案件を読む', () => {
+  const { c, calls } = geminiCtx(() => gemOk({ cases: [kobe, kusatsu] }));
+  const r = plain(c.parseJobText('依頼文'));
+  assert.deepStrictEqual(r.cases.map((x) => x.place), ['メリケンパーク', 'ABCハウジング草津住宅公園']);
+  assert.strictEqual(calls.length, 1);
+  assert.strictEqual(calls[0].url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent');
+  assert.strictEqual(calls[0].headers['x-goog-api-key'], 'g-test');
+  const b = calls[0].body;
+  assert.strictEqual(b.generationConfig.responseMimeType, 'application/json');
+  assert.ok(b.generationConfig.responseJsonSchema.properties.cases);
+  assert.match(b.systemInstruction.parts[0].text, /セブンハーツ/);
+  assert.match(b.contents[0].parts[0].text, /^<依頼文>/);
+  assert.match(b.contents[0].parts[1].text, /すべて取り出して cases/);
+});
+
+test('Gemini：スキーマ指定を受け付けないモデルなら、指示文で形を伝えてやり直す', () => {
+  const { c, calls } = geminiCtx((body, n) => n === 1
+    ? [400, { error: { code: 400, message: 'Invalid JSON payload received. Unknown name "responseJsonSchema"', status: 'INVALID_ARGUMENT' } }]
+    : gemOk(null, '```json\n' + JSON.stringify({ cases: [kobe] }) + '\n```'));
+  assert.strictEqual(plain(c.parseJobText('x')).cases.length, 1);
+  assert.strictEqual(calls.length, 2);
+  assert.strictEqual(calls[1].body.generationConfig.responseJsonSchema, undefined);
+  assert.match(calls[1].body.contents[0].parts[1].text, /JSON Schema に従った/);
+});
+
+test('Gemini：1分あたりの上限は指定の時間待ってやり直し、1日の上限はすぐに知らせる', () => {
+  const perMin = [429, { error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'Quota exceeded for metric: generate_content_free_tier_requests, limit: 10',
+    details: [{ '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '12s' }] } }];
+  const a = geminiCtx((b, n) => n === 1 ? perMin : gemOk({ cases: [kobe] }));
+  assert.strictEqual(plain(a.c.parseJobText('x')).cases.length, 1);
+  assert.deepStrictEqual(a.sleeps, [12000]);
+
+  const perDay = [429, { error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'Quota exceeded',
+    details: [{ violations: [{ quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier' }] }] } }];
+  const d = geminiCtx(() => perDay);
+  assert.throws(() => d.c.parseJobText('x'), /今日の無料枠を使い切りました/);
+  assert.strictEqual(d.calls.length, 1);
+});
+
+test('Gemini：APIキーの誤り・モデル名の誤り・断られた・長すぎる・未設定', () => {
+  const bad = [400, { error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT' } }];
+  assert.throws(() => geminiCtx(() => bad).c.parseJobText('x'), /GEMINI_API_KEY/);
+  assert.throws(() => geminiCtx(() => [404, { error: { code: 404, message: 'models/x is not found' } }], { GEMINI_MODEL: 'x' }).c.parseJobText('x'), /モデル「x」/);
+  assert.throws(() => geminiCtx(() => [200, { promptFeedback: { blockReason: 'SAFETY' } }]).c.parseJobText('x'), /断りました/);
+  assert.throws(() => geminiCtx(() => [200, { candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [] } }] }]).c.parseJobText('x'), /分けて/);
+  assert.throws(() => geminiCtx(() => gemOk({ cases: [] })).c.parseJobText('x'), /読み取れませんでした/);
+  assert.throws(() => geminiCtx(() => gemOk({}), { GEMINI_API_KEY: '', AI_PROVIDER: 'gemini' }).c.parseJobText('x'), /GEMINI_API_KEY を設定/);
+});

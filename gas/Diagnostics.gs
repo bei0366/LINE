@@ -93,14 +93,29 @@ function checkSettings() {
     ok('CALL_URL（LINEコールの通話用URL）は設定済み：' + callUrl);
   }
 
+  // 案件の読み取りに使う AI
+  var ai = aiProvider_(props);
+  var geminiKey = (props.GEMINI_API_KEY || '').trim();
   var apiKey = (props.ANTHROPIC_API_KEY || '').trim();
-  if (!apiKey) {
-    warn('ANTHROPIC_API_KEY が未設定です。案件の取り込み（AIでの読み取り）を使うには、Claude の APIキーを入れてください');
+  if (ai === 'gemini') {
+    var model = (props.GEMINI_MODEL || '').trim() || DEFAULT_GEMINI_MODEL;
+    if (!geminiKey) {
+      ng('AI_PROVIDER が gemini ですが、GEMINI_API_KEY が未設定です。Google AI Studio で APIキーを発行して入れてください');
+    } else {
+      var gm = UrlFetchApp.fetch(GEMINI_URL + encodeURIComponent(model), {
+        headers: { 'x-goog-api-key': geminiKey }, muteHttpExceptions: true
+      });
+      if (gm.getResponseCode() === 200) ok('案件の読み取りは Gemini（' + model + '）を使います。APIキーは有効です');
+      else if (gm.getResponseCode() === 404) ng('Gemini のモデル「' + model + '」が見つかりません。GEMINI_MODEL を削除するか、正しいモデル名にしてください');
+      else ng('GEMINI_API_KEY が無効です（' + gm.getResponseCode() + '）。Google AI Studio で発行した APIキー全体を、前後の空白なしで入れてください');
+    }
+  } else if (!apiKey) {
+    warn('案件の取り込み（AIでの読み取り）を使うには、GEMINI_API_KEY（無料枠あり）か ANTHROPIC_API_KEY を入れてください');
   } else {
     var models = UrlFetchApp.fetch('https://api.anthropic.com/v1/models?limit=1', {
       headers: { 'x-api-key': apiKey, 'anthropic-version': ANTHROPIC_VERSION }, muteHttpExceptions: true
     });
-    if (models.getResponseCode() === 200) ok('ANTHROPIC_API_KEY（Claude の APIキー）は有効です');
+    if (models.getResponseCode() === 200) ok('案件の読み取りは Claude を使います。ANTHROPIC_API_KEY は有効です');
     else ng('ANTHROPIC_API_KEY が無効です（' + models.getResponseCode() + '）。Claude Console で発行した APIキー全体を、前後の空白なしで入れてください');
   }
 

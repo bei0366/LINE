@@ -44,7 +44,16 @@ function jobListPrompt_() {
 /** 2回目：案件ごとに詳しく読む */
 function jobDetailPrompt_(label, all) {
   return '上の依頼文に含まれる案件は次のとおりです：\n' + all.map(function (l) { return '・' + l; }).join('\n') + '\n\n' +
-    'このうち「' + label + '」の案件だけについて、項目を取り出してください。\n\n' +
+    'このうち「' + label + '」の案件だけについて、項目を取り出してください。\n\n' + JOB_FIELD_RULES_;
+}
+
+/** Gemini 用：1回の問い合わせですべての案件を読む（無料枠は1日の回数が少ないため） */
+function jobAllPrompt_() {
+  return '上の依頼文に含まれる案件（イベント・現場ごと）を、書かれている順にすべて取り出して cases に入れてください。' +
+    '同じイベントで日程が複数あっても1つの案件です。案件ごとに、次のとおり項目を入れてください。\n\n' + JOB_FIELD_RULES_;
+}
+
+var JOB_FIELD_RULES_ =
     '- shifts：勤務する日ごとに1つ。同じ日に時間帯が複数あれば時間帯ごとに分け、それぞれの人数を入れる。' +
     '「10/7〜9 各日8名」なら3日分それぞれ8名。日によって時間が違えばその日の時間を使う\n' +
     '- start / end：勤務時間（集合時間ではない）。「HH:MM」の24時間表記\n' +
@@ -57,7 +66,6 @@ function jobDetailPrompt_(label, all) {
     '- gender：性別の指定（「男女不問」「男女可能」は 男女可）。conditions には性別・年齢などの条件をそのまま\n' +
     '- notes：時間が前後する可能性など、上の項目に入らない注意事項（短く）\n' +
     '- client_name：依頼文に依頼元の会社名がはっきり書かれていれば。なければ空文字';
-}
 
 var NULLABLE_INT_ = { anyOf: [{ type: 'integer' }, { type: 'null' }] };
 var NULLABLE_NUM_ = { anyOf: [{ type: 'number' }, { type: 'null' }] };
@@ -105,6 +113,8 @@ var JOB_DETAIL_SCHEMA = objectSchema_({
     })
   }
 });
+
+var JOB_ALL_SCHEMA = objectSchema_({ cases: { type: 'array', items: JOB_DETAIL_SCHEMA } });
 
 // ---- 日付と時間 ----
 

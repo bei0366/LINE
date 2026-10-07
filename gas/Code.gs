@@ -13,6 +13,8 @@ var DEFAULT_PRIVACY_POLICY_URL = 'https://bei0366.github.io/LINE/liff/privacy.ht
 
 /** 案件の読み取りに使う Claude のモデル。スクリプト プロパティ CLAUDE_MODEL で変更できる */
 var DEFAULT_CLAUDE_MODEL = 'claude-opus-5-5';
+/** 案件の読み取りに使う Gemini のモデル（最新の Flash を指す名前）。スクリプト プロパティ GEMINI_MODEL で変更できる */
+var DEFAULT_GEMINI_MODEL = 'gemini-flash-latest';
 
 function getConfig_() {
   var p = PropertiesService.getScriptProperties().getProperties();
@@ -28,9 +30,20 @@ function getConfig_() {
     callUrl: (p.CALL_URL || '').trim(),
     anthropicApiKey: (p.ANTHROPIC_API_KEY || '').trim(),
     claudeModel: (p.CLAUDE_MODEL || '').trim() || DEFAULT_CLAUDE_MODEL,
+    geminiApiKey: (p.GEMINI_API_KEY || '').trim(),
+    geminiModel: (p.GEMINI_MODEL || '').trim() || DEFAULT_GEMINI_MODEL,
+    // 読み取りに使う AI。AI_PROVIDER（gemini / claude）がなければ、APIキーが入っているほうを使う
+    aiProvider: aiProvider_(p),
     // 入金予定月 = 売上計上月の何か月後か（取引先ごとに違う場合はシートで直してください）
     paymentMonthsAfter: /^\d+$/.test((p.PAYMENT_MONTHS_AFTER || '').trim()) ? +p.PAYMENT_MONTHS_AFTER.trim() : 1
   };
+}
+
+function aiProvider_(p) {
+  var v = (p.AI_PROVIDER || '').trim().toLowerCase();
+  if (v === 'gemini' || v === 'claude') return v;
+  if ((p.GEMINI_API_KEY || '').trim()) return 'gemini';
+  return 'claude';
 }
 
 function json_(obj) {
@@ -64,7 +77,7 @@ function doPost(e) {
  * コードの版。コードを変えるたびに更新する。
  * checkSettings がウェブアプリ（デプロイ済み）の版と比べて、デプロイし忘れを見つける。
  */
-var APP_VERSION = '2026-10-06.1';
+var APP_VERSION = '2026-10-07.1';
 
 function doGet() {
   return json_({ ok: true, service: 'sevenhearts-staff-registration', version: APP_VERSION });

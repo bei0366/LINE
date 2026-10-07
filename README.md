@@ -119,7 +119,7 @@ Googleスプレッドシートに自動で保存するツールです。日雇�
 
 ## 案件の取り込みと LINE 配信
 
-お客様から届いた手配依頼の文章を貼り付けるだけで、AI（Claude）が読み取ってシート「案件一覧」にまとめます。
+お客様から届いた手配依頼の文章を貼り付けるだけで、AI（Gemini または Claude）が読み取ってシート「案件一覧」にまとめます。
 まとめた案件は、条件に合うスタッフに LINE で一斉に案内でき、スタッフはボタンを押すだけで応募できます。
 
 ```
@@ -133,11 +133,11 @@ Googleスプレッドシートに自動で保存するツールです。日雇�
 ### 使い始める（すでにスタッフ登録ツールを運用中の場合）
 
 1. Apps Script に `Jobs.gs`・`JobsApp.gs` と、HTML ファイル `JobImport`・`JobSend` を追加し、変更のあった `Code.gs`・`Sheet.gs`・`Webhook.gs`・`Interview.gs`・`Diagnostics.gs` を貼り直す
-2. スクリプト プロパティに `ANTHROPIC_API_KEY` を追加する（「セットアップ手順 2-5」参照）
+2. スクリプト プロパティに `GEMINI_API_KEY` を追加する（下の「AIの切り替え」参照）
 3. 関数 `setup` を実行する（シート「案件一覧」「案件応募」「案件取込履歴」ができます）
 4. 「デプロイを管理 > 鉛筆アイコン > 新バージョン」でデプロイし直す（応募ボタンを受け付けるため）
 5. スプレッドシートを開き直すと、メニュー「セブンハーツ」に「案件を取り込む」「案件をLINEで配信」が出ます
-6. `checkSettings` を実行し、APIキーとシートの列に ❌ がないことを確認する
+6. `checkSettings` を実行し、「案件の読み取りは Gemini（…）を使います。APIキーは有効です」と出て、シートの列に ❌ がないことを確認する
 
 ### 取り込み
 
@@ -190,11 +190,29 @@ Googleスプレッドシートに自動で保存するツールです。日雇�
 確定・見送りの連絡を送ると「結果の通知日時」に記入されます（2回は送りません）。
 新しい応募があると、`ADMIN_EMAIL` にメールでお知らせします。
 
+### AIの切り替え（Gemini の無料枠／Claude）
+
+読み取りに使う AI は、スクリプト プロパティで選びます。`AI_PROVIDER` がなければ、APIキーが入っているほうを使います（両方あれば Gemini）。
+
+| | Gemini（Google） | Claude（Anthropic） |
+|---|---|---|
+| 費用 | 無料枠の範囲なら無料 | 従量課金。案件1件の依頼文で10円前後、7件入りで50円前後 |
+| APIキー | [Google AI Studio](https://aistudio.google.com/apikey) の「APIキーを作成」（クレジットカード不要） | [Claude Console](https://platform.claude.com/) の「API Keys」 |
+| スクリプト プロパティ | `GEMINI_API_KEY` | `ANTHROPIC_API_KEY` |
+| 読み取り方 | 依頼文1通を1回で読む | 案件を数えてから、案件ごとに並べて読む |
+| 送った文章の扱い | **無料枠では、Google がサービスの改善に使うことがあります**（有料にすると使われません） | サービスの改善には使われません |
+
+Gemini の無料枠について
+- 1分・1日に使える回数に上限があります（モデルやGoogleの方針で変わります。[AI Studio](https://aistudio.google.com/) の「使用状況」で確認できます）。1日の上限に達すると「今日の無料枠を使い切りました」と表示され、翌日（日本時間の午後4〜5時ごろにリセット）まで使えません
+- モデルは最新の Flash（`gemini-flash-latest`）を使います。変えるときは `GEMINI_MODEL` にモデル名を入れてください
+- 依頼文には取引先の案件内容や現場担当者の連絡先が入るため、取引先との守秘義務の範囲で使ってください。気になる場合は Google AI Studio で課金を有効にする（有料枠）か、Claude に切り替えてください
+
+Claude に切り替えるときは、`ANTHROPIC_API_KEY` を入れて `AI_PROVIDER` を `claude` にします（`GEMINI_API_KEY` は残したままでかまいません）。
+読み取りの精度に差があると感じたら、同じ依頼文で両方を試して比べてください。
+
 ### 費用と注意
 
-- 読み取りには Claude の API を使います（Anthropic への従量課金）。目安は、案件1件の依頼文で10円前後、この README の例のような7件入りの依頼文で50円前後です
-  - スクリプト プロパティ `CLAUDE_MODEL` に `claude-sonnet-5-5` を入れると、費用はおよそ半分になります（読み取りの精度は少し下がることがあります）
-- 貼り付けた依頼文は、読み取りのために Anthropic の API に送信されます
+- 読み取りの費用は上の表のとおりです
 - 配信・確定・見送りの連絡は、LINE公式アカウントの月の無料メッセージ数にカウントされます（1人に1回送るごとに1通）。応募したときの返信は無料の応答メッセージです
 
 ## 構成
@@ -203,7 +221,7 @@ Googleスプレッドシートに自動で保存するツールです。日雇�
 |---|---|
 | `gas/` | Google Apps Script。LINEのWebhook、トークでお名前を聞く処理（`Chat.gs`）、フォームから呼ばれるAPI、シートとドライブへの保存 |
 | `liff/` | LINE内で開くフォーム（LIFF）。GitHub Pagesなどで公開する |
-| `gas/Jobs.gs`・`gas/JobsApp.gs`・`gas/JobImport.html`・`gas/JobSend.html` | 案件の取り込み（Claude で読み取り）と LINE 配信・応募 |
+| `gas/Jobs.gs`・`gas/JobsApp.gs`・`gas/JobImport.html`・`gas/JobSend.html` | 案件の取り込み（Gemini／Claude で読み取り）と LINE 配信・応募 |
 | `tests/` | 入力チェック、トークでのやりとり、案件の計算と配信のテスト（`npm test`） |
 
 サーバーを借りる必要はなく、LINE・Google・GitHubの無料の範囲で動きます。
@@ -244,8 +262,11 @@ Googleスプレッドシートに自動で保存するツールです。日雇�
 | `CALL_URL` | LINEコールの通話用URL（任意。「LINEコールの準備」参照） |
 | `WEBAPP_URL` | ウェブアプリのURL（任意。`checkSettings` がデプロイ済みの版を確認するのに使う） |
 | `PRIVACY_POLICY_URL` | 自社のプライバシーポリシーのURL（任意だが推奨） |
-| `ANTHROPIC_API_KEY` | 案件の取り込みに使う Claude の APIキー。[Claude Console](https://platform.claude.com/) の「API Keys」で発行する（案件の取り込みを使う場合は必須） |
-| `CLAUDE_MODEL` | 読み取りに使うモデル（任意。初期値 `claude-opus-5-5`） |
+| `GEMINI_API_KEY` | 案件の取り込みに使う Gemini の APIキー（無料枠あり。「AIの切り替え」参照） |
+| `GEMINI_MODEL` | Gemini のモデル（任意。初期値 `gemini-flash-latest`） |
+| `ANTHROPIC_API_KEY` | Claude で読み取る場合の APIキー（任意。「AIの切り替え」参照） |
+| `CLAUDE_MODEL` | Claude のモデル（任意。初期値 `claude-opus-5-5`。`claude-sonnet-5-5` にすると費用はおよそ半分） |
+| `AI_PROVIDER` | 読み取りに使う AI（任意。`gemini` か `claude`。なければ APIキーが入っているほう） |
 | `PAYMENT_MONTHS_AFTER` | 入金予定月が売上計上月の何か月後か（任意。初期値 `1`） |
 
 6. エディタで関数 `setup` を選んで「実行」し、表示される権限をすべて許可する。次のものが自動で作られます。
