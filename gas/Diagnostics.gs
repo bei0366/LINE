@@ -83,6 +83,17 @@ function checkSettings() {
   var hasScheduler = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'runScheduler'; });
   if (hasScheduler) ok('リマインド・通話ボタン・不採用通知の自動送信トリガー（1分ごと）があります');
   else ng('リマインド・通話ボタン・不採用通知の自動送信トリガーがありません。setup を実行してください');
+  var calId = (props.CALENDAR_ID || '').trim();
+  if (calId.toLowerCase() === 'off') {
+    warn('CALENDAR_ID が off のため、面接日時を Google カレンダーに登録しません');
+  } else {
+    try {
+      var cal = interviewCalendar_();
+      ok('面接日時は Google カレンダー「' + cal.getName() + '」に登録します');
+    } catch (err) {
+      ng('Google カレンダーを使えません：' + err.message + '。setup を実行してカレンダーの権限を許可するか、CALENDAR_ID を確認してください');
+    }
+  }
   var callUrl = (props.CALL_URL || '').trim();
   if (!callUrl) {
     warn('CALL_URL は未設定です（このままでも動きます）。面接の時刻には「トーク画面上の📞ボタンから発信してください」という案内を送ります。' +

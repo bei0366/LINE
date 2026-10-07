@@ -118,11 +118,7 @@ var JOB_ALL_SCHEMA = objectSchema_({ cases: { type: 'array', items: JOB_DETAIL_S
 
 // ---- 日付と時間 ----
 
-var WEEKDAYS_JA = ['日', '月', '火', '水', '木', '金', '土'];
-
-function pad2_(n) {
-  return (n < 10 ? '0' : '') + n;
-}
+// WEEKDAYS_JA・pad2_ は Validation.gs のものを使う
 
 function ymd_(d) {
   return d.getFullYear() + '/' + pad2_(d.getMonth() + 1) + '/' + pad2_(d.getDate());

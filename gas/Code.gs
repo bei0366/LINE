@@ -28,6 +28,9 @@ function getConfig_() {
     adminEmail: p.ADMIN_EMAIL || '',
     privacyPolicyUrl: p.PRIVACY_POLICY_URL || DEFAULT_PRIVACY_POLICY_URL,
     callUrl: (p.CALL_URL || '').trim(),
+    // 面接を登録する Google カレンダー（空ならスクリプトを実行する人のメインのカレンダー、off なら登録しない）
+    calendarId: (p.CALENDAR_ID || '').trim(),
+    interviewMinutes: /^\d+$/.test((p.INTERVIEW_MINUTES || '').trim()) ? +p.INTERVIEW_MINUTES.trim() : 30,
     anthropicApiKey: (p.ANTHROPIC_API_KEY || '').trim(),
     claudeModel: (p.CLAUDE_MODEL || '').trim() || DEFAULT_CLAUDE_MODEL,
     geminiApiKey: (p.GEMINI_API_KEY || '').trim(),
@@ -77,7 +80,7 @@ function doPost(e) {
  * コードの版。コードを変えるたびに更新する。
  * checkSettings がウェブアプリ（デプロイ済み）の版と比べて、デプロイし忘れを見つける。
  */
-var APP_VERSION = '2026-10-07.1';
+var APP_VERSION = '2026-10-07.2';
 
 function doGet() {
   return json_({ ok: true, service: 'sevenhearts-staff-registration', version: APP_VERSION });
@@ -100,6 +103,7 @@ function notifyAdmin_(subject, name) {
  * - シートの作成と見出しの設定
  * - 提出書類を保存する Google ドライブのフォルダの作成
  * - ステータス変更を検知するトリガーの登録
+ * - Google カレンダーの権限の確認（面接日時を登録するため）
  */
 function setup() {
   var props = PropertiesService.getScriptProperties();
@@ -146,6 +150,9 @@ function setup() {
   if (handlers.indexOf('onStatusEdit') < 0) ScriptApp.newTrigger('onStatusEdit').forSpreadsheet(ss).onEdit().create();
   // リマインド・通話ボタン・不採用通知を時刻どおりに送るため、1分ごとに確認する
   if (handlers.indexOf('runScheduler') < 0) ScriptApp.newTrigger('runScheduler').timeBased().everyMinutes(1).create();
+
+  // カレンダーの権限をここで許可してもらう（許可がないと、1分ごとの自動処理でカレンダーに登録できない）
+  if (getConfig_().calendarId.toLowerCase() !== 'off') interviewCalendar_();
 
   console.log('セットアップ完了');
   console.log('Webhook URL: <ウェブアプリのURL>?token=' + props.getProperty('WEBHOOK_TOKEN'));

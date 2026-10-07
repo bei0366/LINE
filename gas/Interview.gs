@@ -7,7 +7,9 @@
  * - 「書類落選」→ すぐに不採用通知を送る（onStatusEdit から。送れなかった場合は runScheduler が送り直す）
  * - 「不採用」（面接後）→ 翌日の午前10時に不採用通知を送る（runScheduler）
  *
- * scheduledActions_ と文面をつくる関数はシートや LINE に触れないので、tests/interview.test.js で確認できる。
+ * - 面接確定 → Google カレンダーに予定を登録。日時が変われば予定も動かし、取り消しになれば予定を消す（runScheduler）
+ *
+ * scheduledActions_・calendarAction_ と文面をつくる関数はシートや LINE に触れないので、tests/interview.test.js で確認できる。
  */
 
 var REMINDER_HOUR = 9;          // 面接当日のリマインド
@@ -188,6 +190,42 @@ function scheduledActions_(rec, now) {
   return actions;
 }
 
+/**
+ * Google カレンダーの予定をどうするか：'create' / 'update' / 'delete' / ''（何もしない）
+ * - 面接確定で日時が読める → 予定がなければ作る。登録した日時と違えば動かす
+ * - それ以外（日程再調整・面接前の不採用など）→ 予定を消す。ただし面接が済んだ予定は記録として残す
+ */
+function calendarAction_(rec, now) {
+  var at = rec.status === STATUS.INTERVIEW_FIXED ? parseDateTime_(rec.interviewAt, now) : null;
+  var synced = rec.calendarAt ? parseDateTime_(rec.calendarAt, now) : null;
+  if (at) {
+    if (!rec.calendarEventId) return 'create';
+    return synced && synced.getTime() === at.getTime() ? '' : 'update';
+  }
+  if (!rec.calendarEventId) return '';
+  if (synced && synced <= now) return '';
+  return 'delete';
+}
+
+function calendarTitle_(rec) {
+  return '面接（LINEコール）' + fullName_(rec) + ' さん';
+}
+
+function calendarDescription_(rec, sheetUrl) {
+  var lines = [
+    'セブンハーツ スタッフ面接（LINEコール・音声通話）',
+    '面接の時刻に応募者へ「通話する」ボタンが自動で送られます。LINE公式アカウントアプリで着信に応答してください。',
+    '',
+    '氏名：' + fullName_(rec) + (rec.lastNameKana ? '（' + rec.lastNameKana + ' ' + rec.firstNameKana + '）' : '')
+  ];
+  if (rec.age) lines.push('年齢：' + rec.age + '歳（登録時）');
+  if (rec.phone) lines.push('電話番号：' + rec.phone);
+  if (rec.areas) lines.push('希望エリア：' + rec.areas);
+  if (rec.occupation) lines.push('職業：' + rec.occupation);
+  if (sheetUrl) lines.push('', '登録内容：' + sheetUrl);
+  return lines.join('\n');
+}
+
 // ---- シート・LINE とのやりとり ----
 
 /** 「書類通過」にしたとき：候補日を送って「面接日程調整中」にする */
@@ -340,11 +378,34 @@ function runScheduler() {
   var header = headerMap_(sh);
   var rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
   var now = new Date();
-  var callUrl = getConfig_().callUrl;
+  var cfg = getConfig_();
+  var callUrl = cfg.callUrl;
+  // 「カレンダー予定ID」の列がない（setup を実行し直していない）ときと、off のときはカレンダーに登録しない
+  var useCalendar = cfg.calendarId.toLowerCase() !== 'off' && header[labelOf_(REG_SHEET, 'calendarEventId')] !== undefined;
+  var calendar = null;
+  // うまくいかなかったときは1時間待ってからやり直す（同じエラーを1分ごとに記録し続けないため）
+  var cache = useCalendar ? CacheService.getScriptCache() : null;
+  if (cache && cache.get('cal:all')) useCalendar = false;
 
   rows.forEach(function (values) {
     var rec = rowToRecord_(REG_SHEET, header, values);
     if (!rec.userId) return;
+    var calAction = useCalendar ? calendarAction_(rec, now) : '';
+    if (calAction && !cache.get('cal:' + rec.userId)) {
+      try {
+        if (!calendar) calendar = interviewCalendar_();
+        syncInterviewCalendar_(calendar, rec, calAction, cfg.interviewMinutes, now);
+      } catch (err) {
+        console.error('calendar sync failed', calAction, rec.userId, err && err.stack || err);
+        logError_('カレンダー：' + calAction + '（1時間後にやり直します）', rec.userId, err);
+        if (!calendar) {
+          cache.put('cal:all', '1', 3600); // カレンダーそのものが使えない（権限・CALENDAR_ID の誤り）
+          useCalendar = false;
+        } else {
+          cache.put('cal:' + rec.userId, '1', 3600);
+        }
+      }
+    }
     scheduledActions_(rec, now).forEach(function (action) {
       try {
         runAction_(rec, action, callUrl);
@@ -379,4 +440,45 @@ function runAction_(rec, action, callUrl) {
       }
       return;
   }
+}
+
+/** 面接を登録するカレンダー（CALENDAR_ID が空ならメインのカレンダー） */
+function interviewCalendar_() {
+  var id = getConfig_().calendarId;
+  var cal = id ? CalendarApp.getCalendarById(id) : CalendarApp.getDefaultCalendar();
+  if (!cal) throw new Error('カレンダー「' + id + '」が見つからないか、編集の権限がありません（スクリプト プロパティ CALENDAR_ID を確認してください）');
+  return cal;
+}
+
+function findEvent_(calendar, id) {
+  if (!id) return null;
+  try {
+    return calendar.getEventById(id);
+  } catch (err) {
+    return null; // カレンダーから手で消された場合など
+  }
+}
+
+/** calendarAction_ の結果のとおりにカレンダーの予定を作る・動かす・消す */
+function syncInterviewCalendar_(calendar, rec, action, minutes, now) {
+  if (action === 'delete') {
+    var old = findEvent_(calendar, rec.calendarEventId);
+    if (old) old.deleteEvent();
+    writeRecord_(REG_SHEET, rec.userId, { calendarEventId: '', calendarAt: '' });
+    return;
+  }
+  var at = parseDateTime_(rec.interviewAt, now);
+  var end = new Date(at.getTime() + minutes * 60000);
+  var title = calendarTitle_(rec);
+  var description = calendarDescription_(rec, spreadsheet_().getUrl());
+  var ev = action === 'update' ? findEvent_(calendar, rec.calendarEventId) : null;
+  if (ev) {
+    ev.setTime(at, end);
+    ev.setTitle(title);
+    ev.setDescription(description);
+  } else {
+    ev = calendar.createEvent(title, at, end, { description: description });
+    ev.addPopupReminder(10);
+  }
+  writeRecord_(REG_SHEET, rec.userId, { calendarEventId: ev.getId(), calendarAt: formatDateTime_(at) });
 }

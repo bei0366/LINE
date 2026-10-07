@@ -79,6 +79,8 @@ COLUMNS[REG_SHEET] = [
   ['reminderSentAt', 'リマインド送信日時'],
   ['callSentAt', '通話案内の送信日時'],
   ['rejectNotifiedAt', '不採用通知の送信日時'],
+  ['calendarEventId', 'カレンダー予定ID'],
+  ['calendarAt', 'カレンダーに登録した面接日時'],
   ['note', '自己PR・備考'],
   ['referralSource', '当社を知ったきっかけ'],
   ['privacyConsentAt', '個人情報同意日時'],
