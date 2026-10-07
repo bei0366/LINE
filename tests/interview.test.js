@@ -193,7 +193,7 @@ test('カレンダーの予定をどうするか', () => {
 
 test('カレンダーの予定の中身', () => {
   const r = rec({ lastNameKana: 'ヤマダ', firstNameKana: 'ハナコ', age: 22, phone: '090-1234-5678', areas: '大阪、兵庫' });
-  assert.strictEqual(ctx.calendarTitle_(r), '面接（LINEコール）山田 花子 さん');
+  assert.strictEqual(ctx.calendarTitle_(r), '面接（LINEビデオ通話）山田 花子 さん');
   const d = ctx.calendarDescription_(r, 'https://docs.google.com/x');
   assert.match(d, /氏名：山田 花子（ヤマダ ハナコ）/);
   assert.match(d, /電話番号：090-1234-5678/);
@@ -249,7 +249,7 @@ test('1分ごとの自動処理で、カレンダーに登録・移動・削除�
   db.U2 = rec({ userId: 'U2', status: S.PRE });
   c.runScheduler();
   assert.deepStrictEqual(Object.keys(events), ['E1']);
-  assert.strictEqual(events.E1.title, '面接（LINEコール）山田 花子 さん');
+  assert.strictEqual(events.E1.title, '面接（LINEビデオ通話）山田 花子 さん');
   assert.deepStrictEqual([events.E1.start.getHours(), events.E1.end.getHours(), events.E1.end.getMinutes()], [10, 10, 30]);
   assert.strictEqual(events.E1.reminder, 10);
   assert.strictEqual(db.U1.calendarEventId, 'E1');
@@ -291,4 +291,20 @@ test('1分ごとの自動処理で、カレンダーに登録・移動・削除�
   assert.strictEqual(errors.length, 1);
   assert.match(errors[0], /カレンダー「nothing@group\.calendar\.google\.com」が見つからない/);
   assert.deepStrictEqual(errors.filter((e) => !/カレンダー/.test(e)), []);
+});
+
+test('面接の案内：ビデオ通話・20〜30分程度（ボタンの本文は LINE の上限160文字以内）', () => {
+  const r = rec({ interviewAt: '2026/10/12(月) 14:00' });
+  const texts = [ctx.callGuideText_(), ctx.fixedText_(r, '2026/10/12(月) 14:00'), ctx.reminderText_(r),
+    JSON.stringify(ctx.offerMessage_(r, ['2026/10/12(月) 14:00'])), ctx.calendarDescription_(r, '')];
+  texts.forEach((t) => {
+    assert.match(t, /ビデオ通話/);
+    assert.match(t, /20〜30分程度/);
+    assert.doesNotMatch(t, /10〜15分|音声通話・/);
+  });
+  const withUrl = ctx.callMessages_(r, 'https://line.me/R/call/x');
+  assert.strictEqual(withUrl[0].template.actions[0].label, '📹 ビデオ通話する');
+  assert.match(withUrl[0].template.text, /「ビデオ通話」で発信/);
+  assert.ok(withUrl[0].template.text.length <= 160);
+  assert.match(ctx.callMessages_(r, '')[0].text, /「ビデオ通話」で発信/);
 });

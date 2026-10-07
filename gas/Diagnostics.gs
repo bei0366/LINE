@@ -97,7 +97,7 @@ function checkSettings() {
   var callUrl = (props.CALL_URL || '').trim();
   if (!callUrl) {
     warn('CALL_URL は未設定です（このままでも動きます）。面接の時刻には「トーク画面上の📞ボタンから発信してください」という案内を送ります。' +
-      'LINEコールの通話用URLを入れると、案内が「📞 通話する」ボタンになります');
+      'LINEコールの通話用URLを入れると、案内が「📹 ビデオ通話する」ボタンになります');
   } else if (!/^https:\/\/\S+$/.test(callUrl)) {
     ng('CALL_URL の形式が違います（https:// で始まるURLを、前後の空白なしで入れてください）。わからない場合は CALL_URL を削除しても動きます。現在：' + callUrl);
   } else {

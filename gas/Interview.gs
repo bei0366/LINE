@@ -3,7 +3,7 @@
  *
  * - 「書類通過」→ 応募者の希望日時から面接候補をボタンで送る（onStatusEdit から）
  * - 応募者がボタンで日時を選ぶ → 「面接確定」＋ LINEコールの使い方を返信（Webhook の postback）
- * - 面接当日の朝9時にリマインド、面接の時刻に「通話する」ボタンを送る（runScheduler：1分ごと）
+ * - 面接当日の朝9時にリマインド、面接の時刻に「ビデオ通話する」ボタンを送る（runScheduler：1分ごと）
  * - 「書類落選」→ すぐに不採用通知を送る（onStatusEdit から。送れなかった場合は runScheduler が送り直す）
  * - 「不採用」（面接後）→ 翌日の午前10時に不採用通知を送る（runScheduler）
  *
@@ -14,6 +14,7 @@
 
 var REMINDER_HOUR = 9;          // 面接当日のリマインド
 var REJECT_NOTICE_HOUR = 10;    // 面接後の不採用通知（翌日のこの時刻）
+var INTERVIEW_LENGTH = '20〜30分程度'; // 応募者への案内に書く面接の長さ
 var CALL_WINDOW_MINUTES = 60;   // 面接時刻を過ぎてもこの時間内なら通話ボタンを送る（停止などで遅れた場合）
 var BRAND_BROWN = '#381E19';
 
@@ -49,14 +50,17 @@ function interviewRejectText_(rec) {
 }
 
 function callGuideText_() {
-  return '面接は、LINEの無料通話「LINEコール」で行います。\n\n' +
+  return '面接は、LINEの無料ビデオ通話「LINEコール」で行います（' + INTERVIEW_LENGTH + '）。\n\n' +
     '【当日の流れ】\n' +
-    '① 面接の時間になると、このトークに「📞 通話する」ボタンが届きます\n' +
-    '② ボタンをタップし、「発信」を押してください\n' +
-    '③ 担当者が応答し、面接が始まります（10〜15分程度）\n\n' +
+    '① 面接の時間になると、このトークに「📹 ビデオ通話する」ボタンが届きます\n' +
+    '② ボタンをタップし、「ビデオ通話」で発信してください\n' +
+    '　（音声だけでつながった場合は、通話画面のカメラボタンでビデオに切り替えてください）\n' +
+    '③ 担当者が応答し、面接が始まります\n\n' +
     '【事前にご準備ください】\n' +
-    '・静かで、電波（Wi-Fi）の安定した場所\n' +
-    '・スマホの充電\n' +
+    '・静かで明るく、顔がはっきり映る場所\n' +
+    '・電波の安定した環境（ビデオ通話は通信量が多いため、Wi-Fiがおすすめです）\n' +
+    '・スマホの充電と、画面が揺れないようにスマホを立てておけるもの\n' +
+    '・面接にふさわしい服装・身だしなみ\n' +
     '・イヤホンがあると聞き取りやすくなります\n\n' +
     '※ 通話料はかかりません（データ通信を使います）\n' +
     '※ 時間を過ぎてもボタンが届かない場合や、つながらない場合は、このトークでお知らせください';
@@ -65,7 +69,7 @@ function callGuideText_() {
 function fixedText_(rec, at) {
   return fullName_(rec) + ' 様\n\n面接の日時が決まりました。\n\n' +
     '📅 ' + at + '\n' +
-    '📞 LINEコール（音声通話・10〜15分程度）\n\n' +
+    '📹 LINEコール（ビデオ通話・' + INTERVIEW_LENGTH + '）\n\n' +
     '当日の朝' + REMINDER_HOUR + '時にリマインドをお送りします。\n' +
     'ご都合が悪くなった場合は、このトークでお知らせください。';
 }
@@ -73,9 +77,9 @@ function fixedText_(rec, at) {
 function reminderText_(rec) {
   return fullName_(rec) + ' 様\n\n本日は面接の日です。よろしくお願いいたします。\n\n' +
     '📅 ' + rec.interviewAt + '\n' +
-    '📞 LINEコール（音声通話）\n\n' +
-    'お時間になりましたら、このトークに「通話する」ボタンをお送りします。' +
-    '静かで電波の良い場所でお待ちください。\n\n' +
+    '📹 LINEコール（ビデオ通話・' + INTERVIEW_LENGTH + '）\n\n' +
+    'お時間になりましたら、このトークに「ビデオ通話する」ボタンをお送りします。' +
+    '静かで明るく、電波の良い場所でお待ちください。\n\n' +
     'ご都合が悪くなった場合は、このトークでお知らせください。';
 }
 
@@ -83,13 +87,13 @@ function reminderText_(rec) {
 function callMessages_(rec, callUrl) {
   if (callUrl) {
     return [buttonMessage_(
-      fullName_(rec) + ' 様\n面接のお時間になりました。\n下の「通話する」ボタンを押して、発信してください。',
-      '📞 通話する',
+      fullName_(rec) + ' 様\n面接のお時間になりました。\n下のボタンを押して、「ビデオ通話」で発信してください。',
+      '📹 ビデオ通話する',
       callUrl
     )];
   }
   return [textMessage_(fullName_(rec) + ' 様\n\n面接のお時間になりました。\n' +
-    'このトーク画面の上にある📞（通話）ボタンを押し、「音声通話」で発信してください。')];
+    'このトーク画面の上にある📞（通話）ボタンを押し、「ビデオ通話」で発信してください。')];
 }
 
 /** 面接候補のメッセージ（日時ボタン＋「どれも都合が合わない」） */
@@ -117,7 +121,7 @@ function offerMessage_(rec, slots) {
             type: 'text', wrap: true, size: 'sm',
             text: fullName_(rec) + ' 様\n\nこのたびはセブンハーツにご応募いただき、ありがとうございます。\n' +
               '書類選考の結果、ぜひ面接をさせていただきたく、ご連絡いたしました。\n\n' +
-              '面接はLINEの無料通話（10〜15分程度）で行います。ご都合のよい日時を下からお選びください。'
+              '面接はLINEの無料ビデオ通話（' + INTERVIEW_LENGTH + '）で行います。ご都合のよい日時を下からお選びください。'
           }
         ]
       },
@@ -208,13 +212,13 @@ function calendarAction_(rec, now) {
 }
 
 function calendarTitle_(rec) {
-  return '面接（LINEコール）' + fullName_(rec) + ' さん';
+  return '面接（LINEビデオ通話）' + fullName_(rec) + ' さん';
 }
 
 function calendarDescription_(rec, sheetUrl) {
   var lines = [
-    'セブンハーツ スタッフ面接（LINEコール・音声通話）',
-    '面接の時刻に応募者へ「通話する」ボタンが自動で送られます。LINE公式アカウントアプリで着信に応答してください。',
+    'セブンハーツ スタッフ面接（LINEコール・ビデオ通話・' + INTERVIEW_LENGTH + '）',
+    '面接の時刻に応募者へ「ビデオ通話する」ボタンが自動で送られます。LINE公式アカウントアプリで着信に応答してください。',
     '',
     '氏名：' + fullName_(rec) + (rec.lastNameKana ? '（' + rec.lastNameKana + ' ' + rec.firstNameKana + '）' : '')
   ];
