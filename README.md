@@ -127,7 +127,7 @@ Googleスプレッドシートに自動で保存するツールです。日雇�
 
 ### 個人情報の取り扱いページ
 
-`liff/privacy.html`（公開URL：`https://bei0366.github.io/LINE/liff/privacy.html`）。登録フォームの同意欄からリンクしています。
+`liff/privacy.html`（公開URL：`https://seven-hearts.github.io/LINE/liff/privacy.html`）。登録フォームの同意欄からリンクしています。
 事業者名・所在地・代表者・問い合わせ先は、変更があればこのファイルを直してください。
 別のページを使う場合は、スクリプト プロパティ `PRIVACY_POLICY_URL` にそのURLを入れてください。
 
@@ -256,7 +256,7 @@ Claude に切り替えるときは、`ANTHROPIC_API_KEY` を入れて `AI_PROVID
    - 「チャネル基本設定」の **チャネルID** を控える
    - 「LIFF」タブで LIFFアプリを追加
      - サイズ：Full
-     - エンドポイントURL：手順4で公開するURL（`https://bei0366.github.io/LINE/liff/`）。手順4のあとで設定してもかまいません
+     - エンドポイントURL：手順4で公開するURL（`https://seven-hearts.github.io/LINE/liff/`）。手順4のあとで設定してもかまいません
      - Scope：`openid` と `profile` にチェック
      - 友だち追加オプション：On（Aggressive）
    - 作成された **LIFF ID** を控える
@@ -316,7 +316,7 @@ Claude に切り替えるときは、`ANTHROPIC_API_KEY` を入れて `AI_PROVID
 
 1. `liff/js/config.js` の `LIFF_ID` と `GAS_URL`（手順2-7のウェブアプリURL）を書き換えてコミットする
 2. GitHubリポジトリの「Settings > Pages」で、Source を「Deploy from a branch」、Branch を既定ブランチの `/ (root)` にして保存する
-   - フォームのURL：`https://bei0366.github.io/LINE/liff/`
+   - フォームのURL：`https://seven-hearts.github.io/LINE/liff/`
    - リポジトリを非公開にする場合は、Netlify（Publish directory を `liff` にする）でも無料で公開できます
 3. このURLを、手順1-2のLIFFの「エンドポイントURL」に設定する
 

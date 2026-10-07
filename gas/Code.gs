@@ -9,7 +9,7 @@
  */
 
 /** 個人情報の取り扱いページ（liff/privacy.html）。別のページを使う場合はスクリプト プロパティ PRIVACY_POLICY_URL で上書き */
-var DEFAULT_PRIVACY_POLICY_URL = 'https://bei0366.github.io/LINE/liff/privacy.html';
+var DEFAULT_PRIVACY_POLICY_URL = 'https://seven-hearts.github.io/LINE/liff/privacy.html';
 
 /** 案件の読み取りに使う Claude のモデル。スクリプト プロパティ CLAUDE_MODEL で変更できる */
 var DEFAULT_CLAUDE_MODEL = 'claude-opus-5-5';
@@ -80,7 +80,7 @@ function doPost(e) {
  * コードの版。コードを変えるたびに更新する。
  * checkSettings がウェブアプリ（デプロイ済み）の版と比べて、デプロイし忘れを見つける。
  */
-var APP_VERSION = '2026-10-07.3';
+var APP_VERSION = '2026-10-07.4';
 
 function doGet() {
   return json_({ ok: true, service: 'sevenhearts-staff-registration', version: APP_VERSION });
