@@ -12,6 +12,7 @@ function handleWebhook_(body) {
       handleEvent_(ev);
     } catch (err) {
       console.error('webhook event failed', err && err.stack || err);
+      logError_('LINE：' + ev.type, ev.source && ev.source.userId, err);
     }
   });
 }
@@ -100,6 +101,7 @@ function onPostback_(ev, userId) {
     if (i > 0) params[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1));
   });
   if (params.iv) onInterviewPostback_(ev, userId, params);
+  if (params.job) onJobPostback_(ev, userId, params);
 }
 
 /** スタンプや画像など */
@@ -135,7 +137,7 @@ function statusText_(rec) {
     case STATUS.RESCHEDULE:
       return name + '担当者から面接日程のご相談をさせていただきますので、少々お待ちください。';
     case STATUS.INTERVIEW_FIXED:
-      return name + '面接日時：' + rec.interviewAt + '\n当日、時間になりましたら「通話する」ボタンをお送りします。';
+      return name + '面接日時：' + rec.interviewAt + '（LINEのビデオ通話・' + INTERVIEW_LENGTH + '）\n当日、時間になりましたら「ビデオ通話する」ボタンをお送りします。';
     case STATUS.HIRED:
     case STATUS.DOC_REQUESTED:
       return name + '書類のご提出をお待ちしています。「書類」と送信すると提出フォームを開けます。';

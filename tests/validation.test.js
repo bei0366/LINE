@@ -181,3 +181,9 @@ test('書類提出：画像以外のデータを拒否する', () => {
 test('書類提出：他社勤務ありなら申告書の提出状況が必須', () => {
   assert.ok(errorsOf(() => validateOnboarding(onb({ otherJob: 'あり' }), TODAY)).taxDeclarationElsewhere);
 });
+
+test('書類提出：先に送った画像の目印（upload:ファイルID）を受け付ける', () => {
+  const { images } = validateOnboarding(onb({ idFront: 'upload:1AbCdEfGhIjKlMnOpQrStUv', facePhoto: 'upload:1ZyXwVuTsRqPoNmLkJiHgFe' }), TODAY);
+  assert.strictEqual(images.idFront, 'upload:1AbCdEfGhIjKlMnOpQrStUv');
+  assert.ok(errorsOf(() => validateOnboarding(onb({ facePhoto: 'upload:../../x' }), TODAY)).facePhoto);
+});

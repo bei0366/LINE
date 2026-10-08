@@ -152,7 +152,7 @@ test('空の行に FALSE が残っていても、新しい登録はデータの�
   };
   // 前のテストで差し替えた書き込み処理を、本物（Sheet.gs）に戻してから試す
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'gas', 'Sheet.gs'), 'utf8'), ctx);
-  vm.runInContext('sheet_ = function () { return __sheet; }; LockService = { getScriptLock: function () { return { waitLock: function () {}, releaseLock: function () {} }; } };',
+  vm.runInContext('sheet_ = function () { return __sheet; }; LockService = { getScriptLock: function () { return { tryLock: function () { return true; }, releaseLock: function () {} }; } };',
     Object.assign(ctx, { __sheet: sheet }));
   ctx.writeRecord_(ctx.REG_SHEET, 'U_new', { lastName: '新規' });
   assert.strictEqual(rows[2][0], 'U_new');
@@ -167,4 +167,144 @@ test('ステータス変更日時がセルで日付形式になっていても�
   assert.deepStrictEqual(actions(r, at(2026, 10, 6, 10, 0)), ['interviewReject']);
   const f = { status: S.INTERVIEW_FIXED, interviewAt: new Date(2026, 9, 12, 14, 0), reminderSentAt: 'x' };
   assert.deepStrictEqual(actions(f, at(2026, 10, 12, 14, 0)), ['call']);
+});
+
+// ---- Google カレンダー ----
+
+test('カレンダーの予定をどうするか', () => {
+  const now = at(2026, 10, 7, 12, 0);
+  const cal = (r) => ctx.calendarAction_(rec(r), now);
+  const fixed = { status: S.INTERVIEW_FIXED, interviewAt: '2026/10/12(月) 14:00' };
+  assert.strictEqual(cal(fixed), 'create');
+  assert.strictEqual(cal(Object.assign({ calendarEventId: 'E1', calendarAt: '2026/10/12(月) 14:00' }, fixed)), '');
+  // シートで日時を直した（書き方が違っても同じ日時なら何もしない）
+  assert.strictEqual(cal(Object.assign({ calendarEventId: 'E1', calendarAt: '2026/10/12(月) 14:00' }, fixed, { interviewAt: '2026/10/12 14:00' })), '');
+  assert.strictEqual(cal(Object.assign({ calendarEventId: 'E1', calendarAt: '2026/10/12(月) 14:00' }, fixed, { interviewAt: '2026/10/13 15:30' })), 'update');
+  assert.strictEqual(cal({ status: S.INTERVIEW_FIXED, interviewAt: '' }), '');
+  assert.strictEqual(cal({ status: S.INTERVIEW_FIXED, interviewAt: '', calendarEventId: 'E1', calendarAt: '2026/10/12(月) 14:00' }), 'delete');
+  // 日程再調整・面接前の不採用 → 消す
+  assert.strictEqual(cal({ status: S.RESCHEDULE, interviewAt: '2026/10/12(月) 14:00', calendarEventId: 'E1', calendarAt: '2026/10/12(月) 14:00' }), 'delete');
+  assert.strictEqual(cal({ status: S.REJECTED, calendarEventId: 'E1', calendarAt: '2026/10/12(月) 14:00' }), 'delete');
+  // 面接が済んだあと（採用・不採用など）→ 記録として残す
+  assert.strictEqual(cal({ status: S.HIRED, calendarEventId: 'E1', calendarAt: '2026/10/05(月) 14:00' }), '');
+  assert.strictEqual(cal({ status: S.REJECTED, calendarEventId: 'E1', calendarAt: '2026/10/05(月) 14:00' }), '');
+  assert.strictEqual(cal({ status: S.PRE }), '');
+});
+
+test('カレンダーの予定の中身', () => {
+  const r = rec({ lastNameKana: 'ヤマダ', firstNameKana: 'ハナコ', age: 22, phone: '090-1234-5678', areas: '大阪、兵庫' });
+  assert.strictEqual(ctx.calendarTitle_(r), '面接（LINEビデオ通話）山田 花子 さん');
+  const d = ctx.calendarDescription_(r, 'https://docs.google.com/x');
+  assert.match(d, /氏名：山田 花子（ヤマダ ハナコ）/);
+  assert.match(d, /電話番号：090-1234-5678/);
+  assert.match(d, /登録内容：https:\/\/docs\.google\.com\/x/);
+});
+
+test('1分ごとの自動処理で、カレンダーに登録・移動・削除する', () => {
+  const c = vm.createContext({});
+  for (const f of ['Options.gs', 'Validation.gs', 'Line.gs', 'Sheet.gs', 'Interview.gs', 'Code.gs', 'Shift.gs']) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'gas', f), 'utf8'), c, { filename: f });
+  }
+  const header = c.COLUMNS[c.REG_SHEET].map((x) => x[1]);
+  const db = {};
+  const events = {};
+  let nextId = 1;
+  const errors = [];
+  const cacheStore = {};
+  const makeEvent = (id) => ({
+    getId: () => id,
+    setTime: (s, e) => { events[id].start = s; events[id].end = e; },
+    setTitle: (t) => { events[id].title = t; },
+    setDescription: (t) => { events[id].description = t; },
+    addPopupReminder: (m) => { events[id].reminder = m; },
+    deleteEvent: () => { delete events[id]; }
+  });
+  const calendar = {
+    createEvent: (title, start, end, opt) => { const id = 'E' + nextId++; events[id] = { title, start, end, description: opt.description }; return makeEvent(id); },
+    getEventById: (id) => (events[id] ? makeEvent(id) : null)
+  };
+  let props = {};
+  Object.assign(c, {
+    __db: db, __header: header, __cal: calendar, __errors: errors,
+    PropertiesService: { getScriptProperties: () => ({ getProperties: () => props, getProperty: (k) => props[k] || null }) },
+    CalendarApp: { getDefaultCalendar: () => calendar, getCalendarById: () => null },
+    CacheService: { getScriptCache: () => ({ get: (k) => cacheStore[k] || null, put: (k, v) => { cacheStore[k] = v; } }) }
+  });
+  vm.runInContext(`
+    sheet_ = function () {
+      var ids = Object.keys(__db);
+      var rows = [__header].concat(ids.map(function (id) { return __header.map(function (h, i) {
+        var key = COLUMNS[REG_SHEET][i][0]; return __db[id][key] === undefined ? '' : __db[id][key]; }); }));
+      return { getLastRow: function () { return rows.length; }, getLastColumn: function () { return __header.length; },
+        getRange: function (r, col, nr, nc) { return { getValues: function () {
+          return rows.slice(r - 1, r - 1 + nr).map(function (row) { return row.slice(col - 1, col - 1 + nc); }); } }; } };
+    };
+    writeRecord_ = function (sheet, id, f) { __db[id] = Object.assign(__db[id] || {}, f); };
+    spreadsheet_ = function () { return { getUrl: function () { return 'https://sheet'; } }; };
+    pushMessage_ = function () { return {}; };
+    logError_ = function (kind, id, err) { __errors.push(kind + ' ' + err.message); };
+  `, c);
+
+  db.U1 = rec({ status: S.INTERVIEW_FIXED, interviewAt: '2099/01/11(日) 10:00' });
+  db.U2 = rec({ userId: 'U2', status: S.PRE });
+  c.runScheduler();
+  assert.deepStrictEqual(Object.keys(events), ['E1']);
+  assert.strictEqual(events.E1.title, '面接（LINEビデオ通話）山田 花子 さん');
+  assert.deepStrictEqual([events.E1.start.getHours(), events.E1.end.getHours(), events.E1.end.getMinutes()], [10, 10, 30]);
+  assert.strictEqual(events.E1.reminder, 10);
+  assert.strictEqual(db.U1.calendarEventId, 'E1');
+  assert.strictEqual(db.U1.calendarAt, '2099/01/11(日) 10:00');
+
+  // もう一度動いても増えない
+  c.runScheduler();
+  assert.deepStrictEqual(Object.keys(events), ['E1']);
+
+  // 担当者がシートで日時を変えた → 予定を動かす（面接時間は INTERVIEW_MINUTES）
+  props = { INTERVIEW_MINUTES: '45' };
+  db.U1.interviewAt = '2099/01/12 15:00';
+  c.runScheduler();
+  assert.deepStrictEqual(Object.keys(events), ['E1']);
+  assert.deepStrictEqual([events.E1.start.getDate(), events.E1.start.getHours(), events.E1.end.getMinutes()], [12, 15, 45]);
+  assert.strictEqual(db.U1.calendarAt, '2099/01/12(月) 15:00');
+
+  // カレンダーで予定を手で消していた → 作り直す
+  delete events.E1;
+  db.U1.interviewAt = '2099/01/13 15:00';
+  c.runScheduler();
+  assert.deepStrictEqual(Object.keys(events), ['E2']);
+  assert.strictEqual(db.U1.calendarEventId, 'E2');
+
+  // 日程再調整 → 予定を消す
+  db.U1.status = S.RESCHEDULE;
+  c.runScheduler();
+  assert.deepStrictEqual(Object.keys(events), []);
+  assert.strictEqual(db.U1.calendarEventId, '');
+
+  // CALENDAR_ID が off なら登録しない／見つからないカレンダーならエラーを1回だけ記録して1時間止める
+  db.U1.status = S.INTERVIEW_FIXED;
+  props = { CALENDAR_ID: 'off' };
+  c.runScheduler();
+  assert.deepStrictEqual(Object.keys(events), []);
+  props = { CALENDAR_ID: 'nothing@group.calendar.google.com' };
+  c.runScheduler();
+  c.runScheduler();
+  assert.strictEqual(errors.length, 1);
+  assert.match(errors[0], /カレンダー「nothing@group\.calendar\.google\.com」が見つからない/);
+  assert.deepStrictEqual(errors.filter((e) => !/カレンダー/.test(e)), []);
+});
+
+test('面接の案内：ビデオ通話・20〜30分程度（ボタンの本文は LINE の上限160文字以内）', () => {
+  const r = rec({ interviewAt: '2026/10/12(月) 14:00' });
+  const texts = [ctx.callGuideText_(), ctx.fixedText_(r, '2026/10/12(月) 14:00'), ctx.reminderText_(r),
+    JSON.stringify(ctx.offerMessage_(r, ['2026/10/12(月) 14:00'])), ctx.calendarDescription_(r, '')];
+  texts.forEach((t) => {
+    assert.match(t, /ビデオ通話/);
+    assert.match(t, /20〜30分程度/);
+    assert.doesNotMatch(t, /10〜15分|音声通話・/);
+  });
+  const withUrl = ctx.callMessages_(r, 'https://line.me/R/call/x');
+  assert.strictEqual(withUrl[0].template.actions[0].label, '📹 ビデオ通話する');
+  assert.match(withUrl[0].template.text, /「ビデオ通話」で発信/);
+  assert.ok(withUrl[0].template.text.length <= 160);
+  assert.match(ctx.callMessages_(r, '')[0].text, /「ビデオ通話」で発信/);
 });

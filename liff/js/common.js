@@ -34,19 +34,57 @@
    * Apps Script の API を呼ぶ。Content-Type を付けない（text/plain）ことで
    * CORS のプリフライトを発生させずに送信できる。
    */
+  // 一時的な失敗（電波の途切れ、Google側の一時的なエラー）は、間を空けて自動でやり直す
+  var RETRY_DELAYS = [1500, 4000];
+  var RETRY_STATUSES = [404, 408, 429, 500, 502, 503, 504];
+  var RELOGIN_KEY = 'sevenhearts_relogin_at';
+
+  function wait(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+
+  function httpError(status) {
+    var err = new Error(status === 404
+      ? '現在、受付システムに接続できません。お手数ですが、時間をおいてお試しください。\n（担当者の方へ：ウェブアプリのURLが見つかりません（404）。デプロイを確認してください）'
+      : '通信エラーが発生しました（' + status + '）。時間をおいて、もう一度お試しください。');
+    err.status = status;
+    return err;
+  }
+
+  /** ログインの有効期限切れ：入力内容は端末に保存済みなので、LINEログインからやり直す（2分以内の繰り返しはしない） */
+  function relogin(message) {
+    var last = 0;
+    try { last = Number(sessionStorage.getItem(RELOGIN_KEY)) || 0; } catch (e) { /* 何もしない */ }
+    if (!window.liff || Date.now() - last < 120000) return Promise.reject(new Error(message));
+    try { sessionStorage.setItem(RELOGIN_KEY, String(Date.now())); } catch (e) { /* 何もしない */ }
+    alert('ログインの有効期限が切れたため、画面を読み込み直します。');
+    if (liff.isLoggedIn()) liff.logout();
+    liff.login({ redirectUri: location.href });
+    return new Promise(function () {}); // ページの移動を待つ
+  }
+
   function api(action, data) {
-    return fetch(window.APP_CONFIG.GAS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: action, idToken: idToken, data: data || {} })
-    }).then(function (res) {
-      if (!res.ok) {
-        var err = new Error(res.status === 404
-          ? '現在、受付システムに接続できません。お手数ですが、時間をおいてお試しください。\n（担当者の方へ：ウェブアプリのURLが見つかりません（404）。デプロイを確認してください）'
-          : '通信エラーが発生しました（' + res.status + '）');
-        err.status = res.status;
+    var body = JSON.stringify({ action: action, idToken: idToken, data: data || {} });
+    function attempt(i) {
+      var retry = function (err) {
+        if (i < RETRY_DELAYS.length) return wait(RETRY_DELAYS[i]).then(function () { return attempt(i + 1); });
         throw err;
-      }
-      return res.json();
+      };
+      return fetch(window.APP_CONFIG.GAS_URL, { method: 'POST', body: body })
+        .then(function (res) {
+          if (!res.ok) {
+            var err = httpError(res.status);
+            return RETRY_STATUSES.indexOf(res.status) >= 0 ? retry(err) : Promise.reject(err);
+          }
+          // Google のエラーページ（JSONでない応答）が返ることがあるので、その場合もやり直す
+          return res.json().catch(function () {
+            return retry(new Error('サーバーから正しい応答がありませんでした。時間をおいて、もう一度お試しください。'));
+          });
+        }, function () {
+          return retry(new Error('通信に失敗しました。電波の良い場所で、もう一度お試しください。'));
+        });
+    }
+    return attempt(0).then(function (res) {
+      if (res && res.code === 'login') return relogin(res.error);
+      return res;
     });
   }
 
@@ -232,9 +270,9 @@
     });
   }
 
-  /** 画像を長辺 1600px の JPEG に縮小してデータURLにする（送信サイズ削減） */
+  /** 画像を長辺 1280px の JPEG に縮小してデータURLにする（送信サイズ削減。文字が読める大きさは保つ） */
   function resizeImage(file, maxSize) {
-    maxSize = maxSize || 1600;
+    maxSize = maxSize || 1280;
     return new Promise(function (resolve, reject) {
       var url = URL.createObjectURL(file);
       var img = new Image();
@@ -245,7 +283,7 @@
         canvas.height = Math.round(img.height * scale);
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
       };
       img.onerror = function () {
         URL.revokeObjectURL(url);

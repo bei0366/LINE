@@ -3,15 +3,18 @@
  *
  * - 「書類通過」→ 応募者の希望日時から面接候補をボタンで送る（onStatusEdit から）
  * - 応募者がボタンで日時を選ぶ → 「面接確定」＋ LINEコールの使い方を返信（Webhook の postback）
- * - 面接当日の朝9時にリマインド、面接の時刻に「通話する」ボタンを送る（runScheduler：1分ごと）
+ * - 面接当日の朝9時にリマインド、面接の時刻に「ビデオ通話する」ボタンを送る（runScheduler：1分ごと）
  * - 「書類落選」→ すぐに不採用通知を送る（onStatusEdit から。送れなかった場合は runScheduler が送り直す）
  * - 「不採用」（面接後）→ 翌日の午前10時に不採用通知を送る（runScheduler）
  *
- * scheduledActions_ と文面をつくる関数はシートや LINE に触れないので、tests/interview.test.js で確認できる。
+ * - 面接確定 → Google カレンダーに予定を登録。日時が変われば予定も動かし、取り消しになれば予定を消す（runScheduler）
+ *
+ * scheduledActions_・calendarAction_ と文面をつくる関数はシートや LINE に触れないので、tests/interview.test.js で確認できる。
  */
 
 var REMINDER_HOUR = 9;          // 面接当日のリマインド
 var REJECT_NOTICE_HOUR = 10;    // 面接後の不採用通知（翌日のこの時刻）
+var INTERVIEW_LENGTH = '20〜30分程度'; // 応募者への案内に書く面接の長さ
 var CALL_WINDOW_MINUTES = 60;   // 面接時刻を過ぎてもこの時間内なら通話ボタンを送る（停止などで遅れた場合）
 var BRAND_BROWN = '#381E19';
 
@@ -47,14 +50,17 @@ function interviewRejectText_(rec) {
 }
 
 function callGuideText_() {
-  return '面接は、LINEの無料通話「LINEコール」で行います。\n\n' +
+  return '面接は、LINEの無料ビデオ通話「LINEコール」で行います（' + INTERVIEW_LENGTH + '）。\n\n' +
     '【当日の流れ】\n' +
-    '① 面接の時間になると、このトークに「📞 通話する」ボタンが届きます\n' +
-    '② ボタンをタップし、「発信」を押してください\n' +
-    '③ 担当者が応答し、面接が始まります（10〜15分程度）\n\n' +
+    '① 面接の時間になると、このトークに「📹 ビデオ通話する」ボタンが届きます\n' +
+    '② ボタンをタップし、「ビデオ通話」で発信してください\n' +
+    '　（音声だけでつながった場合は、通話画面のカメラボタンでビデオに切り替えてください）\n' +
+    '③ 担当者が応答し、面接が始まります\n\n' +
     '【事前にご準備ください】\n' +
-    '・静かで、電波（Wi-Fi）の安定した場所\n' +
-    '・スマホの充電\n' +
+    '・静かで明るく、顔がはっきり映る場所\n' +
+    '・電波の安定した環境（ビデオ通話は通信量が多いため、Wi-Fiがおすすめです）\n' +
+    '・スマホの充電と、画面が揺れないようにスマホを立てておけるもの\n' +
+    '・面接にふさわしい服装・身だしなみ\n' +
     '・イヤホンがあると聞き取りやすくなります\n\n' +
     '※ 通話料はかかりません（データ通信を使います）\n' +
     '※ 時間を過ぎてもボタンが届かない場合や、つながらない場合は、このトークでお知らせください';
@@ -63,7 +69,7 @@ function callGuideText_() {
 function fixedText_(rec, at) {
   return fullName_(rec) + ' 様\n\n面接の日時が決まりました。\n\n' +
     '📅 ' + at + '\n' +
-    '📞 LINEコール（音声通話・10〜15分程度）\n\n' +
+    '📹 LINEコール（ビデオ通話・' + INTERVIEW_LENGTH + '）\n\n' +
     '当日の朝' + REMINDER_HOUR + '時にリマインドをお送りします。\n' +
     'ご都合が悪くなった場合は、このトークでお知らせください。';
 }
@@ -71,9 +77,9 @@ function fixedText_(rec, at) {
 function reminderText_(rec) {
   return fullName_(rec) + ' 様\n\n本日は面接の日です。よろしくお願いいたします。\n\n' +
     '📅 ' + rec.interviewAt + '\n' +
-    '📞 LINEコール（音声通話）\n\n' +
-    'お時間になりましたら、このトークに「通話する」ボタンをお送りします。' +
-    '静かで電波の良い場所でお待ちください。\n\n' +
+    '📹 LINEコール（ビデオ通話・' + INTERVIEW_LENGTH + '）\n\n' +
+    'お時間になりましたら、このトークに「ビデオ通話する」ボタンをお送りします。' +
+    '静かで明るく、電波の良い場所でお待ちください。\n\n' +
     'ご都合が悪くなった場合は、このトークでお知らせください。';
 }
 
@@ -81,13 +87,13 @@ function reminderText_(rec) {
 function callMessages_(rec, callUrl) {
   if (callUrl) {
     return [buttonMessage_(
-      fullName_(rec) + ' 様\n面接のお時間になりました。\n下の「通話する」ボタンを押して、発信してください。',
-      '📞 通話する',
+      fullName_(rec) + ' 様\n面接のお時間になりました。\n下のボタンを押して、「ビデオ通話」で発信してください。',
+      '📹 ビデオ通話する',
       callUrl
     )];
   }
   return [textMessage_(fullName_(rec) + ' 様\n\n面接のお時間になりました。\n' +
-    'このトーク画面の上にある📞（通話）ボタンを押し、「音声通話」で発信してください。')];
+    'このトーク画面の上にある📞（通話）ボタンを押し、「ビデオ通話」で発信してください。')];
 }
 
 /** 面接候補のメッセージ（日時ボタン＋「どれも都合が合わない」） */
@@ -115,7 +121,7 @@ function offerMessage_(rec, slots) {
             type: 'text', wrap: true, size: 'sm',
             text: fullName_(rec) + ' 様\n\nこのたびはセブンハーツにご応募いただき、ありがとうございます。\n' +
               '書類選考の結果、ぜひ面接をさせていただきたく、ご連絡いたしました。\n\n' +
-              '面接はLINEの無料通話（10〜15分程度）で行います。ご都合のよい日時を下からお選びください。'
+              '面接はLINEの無料ビデオ通話（' + INTERVIEW_LENGTH + '）で行います。ご都合のよい日時を下からお選びください。'
           }
         ]
       },
@@ -186,6 +192,42 @@ function scheduledActions_(rec, now) {
     }
   }
   return actions;
+}
+
+/**
+ * Google カレンダーの予定をどうするか：'create' / 'update' / 'delete' / ''（何もしない）
+ * - 面接確定で日時が読める → 予定がなければ作る。登録した日時と違えば動かす
+ * - それ以外（日程再調整・面接前の不採用など）→ 予定を消す。ただし面接が済んだ予定は記録として残す
+ */
+function calendarAction_(rec, now) {
+  var at = rec.status === STATUS.INTERVIEW_FIXED ? parseDateTime_(rec.interviewAt, now) : null;
+  var synced = rec.calendarAt ? parseDateTime_(rec.calendarAt, now) : null;
+  if (at) {
+    if (!rec.calendarEventId) return 'create';
+    return synced && synced.getTime() === at.getTime() ? '' : 'update';
+  }
+  if (!rec.calendarEventId) return '';
+  if (synced && synced <= now) return '';
+  return 'delete';
+}
+
+function calendarTitle_(rec) {
+  return '面接（LINEビデオ通話）' + fullName_(rec) + ' さん';
+}
+
+function calendarDescription_(rec, sheetUrl) {
+  var lines = [
+    'セブンハーツ スタッフ面接（LINEコール・ビデオ通話・' + INTERVIEW_LENGTH + '）',
+    '面接の時刻に応募者へ「ビデオ通話する」ボタンが自動で送られます。LINE公式アカウントアプリで着信に応答してください。',
+    '',
+    '氏名：' + fullName_(rec) + (rec.lastNameKana ? '（' + rec.lastNameKana + ' ' + rec.firstNameKana + '）' : '')
+  ];
+  if (rec.age) lines.push('年齢：' + rec.age + '歳（登録時）');
+  if (rec.phone) lines.push('電話番号：' + rec.phone);
+  if (rec.areas) lines.push('希望エリア：' + rec.areas);
+  if (rec.occupation) lines.push('職業：' + rec.occupation);
+  if (sheetUrl) lines.push('', '登録内容：' + sheetUrl);
+  return lines.join('\n');
 }
 
 // ---- シート・LINE とのやりとり ----
@@ -295,6 +337,9 @@ function pendingNotices_(now) {
 /** スプレッドシートを開いたときに「セブンハーツ」メニューを出す（シンプルトリガー） */
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('セブンハーツ')
+    .addItem('案件を取り込む（依頼文から）', 'showJobImport')
+    .addItem('案件をLINEで配信', 'showJobSend')
+    .addSeparator()
     .addItem('不採用通知の送信予定を確認', 'showPendingNotices')
     .addItem('不採用通知を今すぐ送る', 'sendRejectionsNow')
     .addSeparator()
@@ -342,18 +387,42 @@ function runScheduler() {
   var header = headerMap_(sh);
   var rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
   var now = new Date();
-  var callUrl = getConfig_().callUrl;
+  var cfg = getConfig_();
+  var callUrl = cfg.callUrl;
+  // 「カレンダー予定ID」の列がない（setup を実行し直していない）ときと、off のときはカレンダーに登録しない
+  var useCalendar = cfg.calendarId.toLowerCase() !== 'off' && header[labelOf_(REG_SHEET, 'calendarEventId')] !== undefined;
+  var calendar = null;
+  // うまくいかなかったときは1時間待ってからやり直す（同じエラーを1分ごとに記録し続けないため）
+  var cache = useCalendar ? CacheService.getScriptCache() : null;
+  if (cache && cache.get('cal:all')) useCalendar = false;
   // 送信済みの月を書く列がないと、毎分送り直してしまうため送らない（setup を実行すると列ができる）
   var canRequestShift = hasShiftRequestColumn_(header);
 
   rows.forEach(function (values) {
     var rec = rowToRecord_(REG_SHEET, header, values);
     if (!rec.userId) return;
+    var calAction = useCalendar ? calendarAction_(rec, now) : '';
+    if (calAction && !cache.get('cal:' + rec.userId)) {
+      try {
+        if (!calendar) calendar = interviewCalendar_();
+        syncInterviewCalendar_(calendar, rec, calAction, cfg.interviewMinutes, now);
+      } catch (err) {
+        console.error('calendar sync failed', calAction, rec.userId, err && err.stack || err);
+        logError_('カレンダー：' + calAction + '（1時間後にやり直します）', rec.userId, err);
+        if (!calendar) {
+          cache.put('cal:all', '1', 3600); // カレンダーそのものが使えない（権限・CALENDAR_ID の誤り）
+          useCalendar = false;
+        } else {
+          cache.put('cal:' + rec.userId, '1', 3600);
+        }
+      }
+    }
     scheduledActions_(rec, now).forEach(function (action) {
       try {
         runAction_(rec, action, callUrl);
       } catch (err) {
         console.error('scheduler failed', action, rec.userId, err && err.stack || err);
+        logError_('自動送信：' + action, rec.userId, err);
       }
     });
     if (canRequestShift && shiftRequestDue_(rec, now)) {
@@ -361,6 +430,7 @@ function runScheduler() {
         sendShiftRequest_(rec, nextShiftMonth_(now));
       } catch (err) {
         console.error('shift request failed', rec.userId, err && err.stack || err);
+        logError_('シフト提出の案内', rec.userId, err);
       }
     }
   });
@@ -390,4 +460,45 @@ function runAction_(rec, action, callUrl) {
       }
       return;
   }
+}
+
+/** 面接を登録するカレンダー（CALENDAR_ID が空ならメインのカレンダー） */
+function interviewCalendar_() {
+  var id = getConfig_().calendarId;
+  var cal = id ? CalendarApp.getCalendarById(id) : CalendarApp.getDefaultCalendar();
+  if (!cal) throw new Error('カレンダー「' + id + '」が見つからないか、編集の権限がありません（スクリプト プロパティ CALENDAR_ID を確認してください）');
+  return cal;
+}
+
+function findEvent_(calendar, id) {
+  if (!id) return null;
+  try {
+    return calendar.getEventById(id);
+  } catch (err) {
+    return null; // カレンダーから手で消された場合など
+  }
+}
+
+/** calendarAction_ の結果のとおりにカレンダーの予定を作る・動かす・消す */
+function syncInterviewCalendar_(calendar, rec, action, minutes, now) {
+  if (action === 'delete') {
+    var old = findEvent_(calendar, rec.calendarEventId);
+    if (old) old.deleteEvent();
+    writeRecord_(REG_SHEET, rec.userId, { calendarEventId: '', calendarAt: '' });
+    return;
+  }
+  var at = parseDateTime_(rec.interviewAt, now);
+  var end = new Date(at.getTime() + minutes * 60000);
+  var title = calendarTitle_(rec);
+  var description = calendarDescription_(rec, spreadsheet_().getUrl());
+  var ev = action === 'update' ? findEvent_(calendar, rec.calendarEventId) : null;
+  if (ev) {
+    ev.setTime(at, end);
+    ev.setTitle(title);
+    ev.setDescription(description);
+  } else {
+    ev = calendar.createEvent(title, at, end, { description: description });
+    ev.addPopupReminder(10);
+  }
+  writeRecord_(REG_SHEET, rec.userId, { calendarEventId: ev.getId(), calendarAt: formatDateTime_(at) });
 }

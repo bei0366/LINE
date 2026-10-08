@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root { --brand: #381E19; --line: #ddd; --muted: #777; --bg: #faf7f5; --err: #c62828; --warn: #8a5a00; }
+  * { box-sizing: border-box; }
+  body { font-family: "Hiragino Sans", "Noto Sans JP", sans-serif; font-size: 13px; margin: 0; padding: 12px 16px 90px; color: #222; }
+  h2 { font-size: 14px; margin: 14px 0 8px; color: var(--brand); }
+  label.l { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  input[type=text] { width: 100%; font: inherit; padding: 5px 6px; border: 1px solid var(--line); border-radius: 4px; }
+  .card { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; background: #fff; }
+  .card.on { border-color: var(--brand); background: var(--bg); }
+  .card-head { display: flex; gap: 8px; align-items: baseline; cursor: pointer; }
+  .card-head strong { color: var(--brand); }
+  .meta { color: var(--muted); font-size: 11px; margin: 4px 0 6px 24px; }
+  .slots { margin: 0 0 6px 24px; font-size: 12px; }
+  .edit { display: flex; gap: 8px; margin-left: 24px; }
+  .edit > div { flex: 1; }
+  .sent { color: var(--warn); font-size: 11px; }
+  .filters label { margin-right: 14px; white-space: nowrap; }
+  button { font: inherit; padding: 7px 16px; border-radius: 4px; border: 1px solid var(--brand); background: #fff; color: var(--brand); cursor: pointer; }
+  button.primary { background: var(--brand); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  .msg { margin: 8px 0; padding: 8px 10px; border-radius: 4px; display: none; white-space: pre-wrap; }
+  .msg.err { display: block; background: #fdecea; color: var(--err); }
+  .msg.info { display: block; background: #eef6ee; color: #2e7d32; }
+  .msg.plain { display: block; background: #f5f5f5; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px; background: #fff; border-top: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
+  .hint { color: var(--muted); font-size: 11px; }
+</style>
+</head>
+<body>
+  <div class="hint">送りたい案件にチェックを入れてください（シートで行を選んでから開くと、その案件にチェックが入ります）。
+「給与」は依頼文の単価（請求額）ではなく、スタッフに支払う金額を入れてください。空欄なら表示しません。</div>
+  <div id="msg" class="msg"></div>
+  <h2>案件</h2>
+  <div id="groups">読み込み中…</div>
+
+  <h2>送信先</h2>
+  <div class="filters" id="statuses"></div>
+  <div class="filters" style="margin-top:6px">
+    <label><input type="checkbox" id="matchArea" checked> 希望エリアが案件の場所と合う人だけ</label>
+    <label><input type="checkbox" id="matchGender" checked> 性別の指定がある案件は、その性別の人だけ</label>
+    <label><input type="checkbox" id="matchWeekday"> 勤務できる曜日が合う人だけ</label>
+  </div>
+  <div id="preview" class="msg"></div>
+
+  <div class="bar">
+    <button id="check">送信先を確認</button>
+    <button id="send" class="primary" disabled>配信する</button>
+    <button onclick="google.script.host.close()">閉じる</button>
+    <span class="hint">1人に送るごとに、LINE公式アカウントの月の無料メッセージ数を1通使います。</span>
+  </div>
+
+<script>
+var data = null;
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function showMsg(text, kind) { var m = $('msg'); m.textContent = text; m.className = 'msg ' + (kind || 'err'); }
+
+google.script.run.withSuccessHandler(function (r) {
+  data = r;
+  $('statuses').innerHTML = '対象のステータス： ' + r.statuses.map(function (s) {
+    return '<label><input type="checkbox" name="status" value="' + esc(s) + '"' + (r.defaultStatuses.indexOf(s) >= 0 ? ' checked' : '') + '> ' + esc(s) + '</label>';
+  }).join('');
+  if (!r.groups.length) { $('groups').textContent = '配信できる案件がありません（募集中で、まだ始まっていない日程が対象です）。'; return; }
+  $('groups').innerHTML = r.groups.map(function (g, i) {
+    var slots = g.slots.map(function (s) {
+      return esc(s.label) + (s.headcount ? ' 募集' + s.headcount + '名' : '') + (s.applied ? '（応募' + s.applied + '）' : '');
+    }).join('<br>');
+    return '<div class="card' + (g.selected ? ' on' : '') + '" id="card' + i + '">' +
+      '<div class="card-head"><input type="checkbox" data-i="' + i + '"' + (g.selected ? ' checked' : '') + '>' +
+      '<strong>' + esc(g.title) + '</strong><span>' + esc(g.place) + '</span>' +
+      (g.sentAt ? '<span class="sent">配信済み（' + esc(g.sentAt) + '）</span>' : '') + '</div>' +
+      '<div class="meta">' + esc([g.client, g.area && ('エリア：' + g.area), g.genderReq !== '記載なし' && g.genderReq !== '男女可' ? g.genderReq : '', g.conditions].filter(Boolean).join('／')) + '</div>' +
+      '<div class="slots">' + slots + '</div>' +
+      '<div class="edit"><div><label class="l">給与（スタッフ向け）</label><input type="text" data-pay="' + i + '" value="' + esc(g.staffPay) + '" placeholder="例：時給1,200円"></div>' +
+      '<div><label class="l">交通費（スタッフ向け）</label><input type="text" data-tr="' + i + '" value="' + esc(g.staffTransport) + '" placeholder="例：¥660（往復）"></div></div>' +
+      '</div>';
+  }).join('');
+}).withFailureHandler(function (e) { showMsg(e.message); }).jobSendInit();
+
+document.addEventListener('change', function (e) {
+  if (e.target.dataset && e.target.dataset.i !== undefined) {
+    $('card' + e.target.dataset.i).className = 'card' + (e.target.checked ? ' on' : '');
+  }
+  $('send').disabled = true; // 条件を変えたら確認し直す
+});
+document.addEventListener('click', function (e) {
+  if (e.target.tagName === 'STRONG' || (e.target.parentNode && e.target.parentNode.className === 'card-head' && e.target.tagName === 'SPAN')) {
+    var cb = e.target.parentNode.querySelector('input[type=checkbox]');
+    cb.checked = !cb.checked;
+    cb.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+});
+
+function request() {
+  var caseIds = [], edits = {};
+  data.groups.forEach(function (g, i) {
+    if (document.querySelector('input[data-i="' + i + '"]').checked) caseIds.push(g.caseId);
+    edits[g.caseId] = {
+      staffPay: document.querySelector('input[data-pay="' + i + '"]').value,
+      staffTransport: document.querySelector('input[data-tr="' + i + '"]').value
+    };
+  });
+  return {
+    caseIds: caseIds, edits: edits,
+    statuses: Array.prototype.map.call(document.querySelectorAll('input[name=status]:checked'), function (x) { return x.value; }),
+    matchArea: $('matchArea').checked, matchGender: $('matchGender').checked, matchWeekday: $('matchWeekday').checked
+  };
+}
+
+$('check').onclick = function () {
+  if (!data) return;
+  var req = request();
+  if (!req.caseIds.length) return showMsg('配信する案件にチェックを入れてください');
+  if (!req.statuses.length) return showMsg('対象のステータスを1つ以上選んでください');
+  $('msg').className = 'msg';
+  $('check').disabled = true;
+  google.script.run.withSuccessHandler(function (r) {
+    $('check').disabled = false;
+    var p = $('preview');
+    p.className = 'msg plain';
+    var lines = r.perCase.map(function (c) {
+      var f = c.filter;
+      var cond = [f.areas.length ? 'エリア：' + f.areas.join('・') : '', f.gender === '女性のみ' || f.gender === '男性のみ' ? f.gender : ''].filter(Boolean).join('／');
+      return '・' + c.title + '：' + c.count + '人' + (cond ? '（' + cond + '）' : '');
+    });
+    p.textContent = '送信先：合計 ' + r.count + '人（受け取る案件は、条件に合うものだけです）\n' + lines.join('\n') +
+      (r.names.length ? '\n\n' + r.names.join('、') + (r.count > r.names.length ? ' ほか' : '') : '');
+    $('send').disabled = !r.count;
+    $('send').textContent = r.count ? r.count + '人に配信する' : '配信する';
+  }).withFailureHandler(function (e) { $('check').disabled = false; showMsg(e.message); }).jobSendPreview(req);
+};
+
+$('send').onclick = function () {
+  $('send').disabled = true;
+  $('check').disabled = true;
+  $('send').textContent = '送信中…';
+  google.script.run.withSuccessHandler(function (r) {
+    $('check').disabled = false;
+    $('send').textContent = '配信する';
+    showMsg(r.sent + '人に配信しました。' + (r.failed ? '\n' + r.failed + '人には送れませんでした（シート「エラーログ」を確認してください）。' : '') +
+      '\n応募はシート「案件応募」に入ります。', r.failed ? 'err' : 'info');
+  }).withFailureHandler(function (e) {
+    $('check').disabled = false;
+    $('send').textContent = '配信する';
+    showMsg(e.message);
+  }).jobSend(request());
+};
+</script>
+</body>
+</html>

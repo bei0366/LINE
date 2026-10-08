@@ -358,7 +358,9 @@ function validateOnboarding(input, today) {
       if (!optional) v.error(key, '画像を選択してください');
       return;
     }
-    if (!/^data:image\/(jpeg|png);base64,[A-Za-z0-9+\/=]+$/.test(s) || s.length > 7000000) {
+    // 画像そのもの（データURL）か、先に送った画像の目印（upload:ファイルID）
+    var isUploaded = /^upload:[A-Za-z0-9_-]{10,}$/.test(s);
+    if (!isUploaded && (!/^data:image\/(jpeg|png);base64,[A-Za-z0-9+\/=]+$/.test(s) || s.length > 7000000)) {
       v.error(key, '画像の形式が正しくありません。撮り直してください');
       return;
     }

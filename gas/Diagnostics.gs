@@ -66,7 +66,7 @@ function checkSettings() {
   // 4. シート・トリガー
   try {
     var ss = SpreadsheetApp.openById(props.SPREADSHEET_ID);
-    [REG_SHEET, ONB_SHEET, CHAT_SHEET, SHIFT_SHEET].forEach(function (name) {
+    [REG_SHEET, ONB_SHEET, CHAT_SHEET, JOB_SHEET, APPLY_SHEET, IMPORT_SHEET, SHIFT_SHEET].forEach(function (name) {
       var sh = ss.getSheetByName(name);
       if (!sh) return ng('シート「' + name + '」がありません。setup を実行してください');
       var header = headerMap_(sh);
@@ -83,14 +83,51 @@ function checkSettings() {
   var hasScheduler = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'runScheduler'; });
   if (hasScheduler) ok('リマインド・通話ボタン・不採用通知・シフト提出の案内の自動送信トリガー（1分ごと）があります');
   else ng('リマインド・通話ボタン・不採用通知・シフト提出の案内の自動送信トリガーがありません。setup を実行してください');
+  var calId = (props.CALENDAR_ID || '').trim();
+  if (calId.toLowerCase() === 'off') {
+    warn('CALENDAR_ID が off のため、面接日時を Google カレンダーに登録しません');
+  } else {
+    try {
+      var cal = interviewCalendar_();
+      ok('面接日時は Google カレンダー「' + cal.getName() + '」に登録します');
+    } catch (err) {
+      ng('Google カレンダーを使えません：' + err.message + '。setup を実行してカレンダーの権限を許可するか、CALENDAR_ID を確認してください');
+    }
+  }
   var callUrl = (props.CALL_URL || '').trim();
   if (!callUrl) {
     warn('CALL_URL は未設定です（このままでも動きます）。面接の時刻には「トーク画面上の📞ボタンから発信してください」という案内を送ります。' +
-      'LINEコールの通話用URLを入れると、案内が「📞 通話する」ボタンになります');
+      'LINEコールの通話用URLを入れると、案内が「📹 ビデオ通話する」ボタンになります');
   } else if (!/^https:\/\/\S+$/.test(callUrl)) {
     ng('CALL_URL の形式が違います（https:// で始まるURLを、前後の空白なしで入れてください）。わからない場合は CALL_URL を削除しても動きます。現在：' + callUrl);
   } else {
     ok('CALL_URL（LINEコールの通話用URL）は設定済み：' + callUrl);
+  }
+
+  // 案件の読み取りに使う AI
+  var ai = aiProvider_(props);
+  var geminiKey = (props.GEMINI_API_KEY || '').trim();
+  var apiKey = (props.ANTHROPIC_API_KEY || '').trim();
+  if (ai === 'gemini') {
+    var model = (props.GEMINI_MODEL || '').trim() || DEFAULT_GEMINI_MODEL;
+    if (!geminiKey) {
+      ng('AI_PROVIDER が gemini ですが、GEMINI_API_KEY が未設定です。Google AI Studio で APIキーを発行して入れてください');
+    } else {
+      var gm = UrlFetchApp.fetch(GEMINI_URL + encodeURIComponent(model), {
+        headers: { 'x-goog-api-key': geminiKey }, muteHttpExceptions: true
+      });
+      if (gm.getResponseCode() === 200) ok('案件の読み取りは Gemini（' + model + '）を使います。APIキーは有効です');
+      else if (gm.getResponseCode() === 404) ng('Gemini のモデル「' + model + '」が見つかりません。GEMINI_MODEL を削除するか、正しいモデル名にしてください');
+      else ng('GEMINI_API_KEY が無効です（' + gm.getResponseCode() + '）。Google AI Studio で発行した APIキー全体を、前後の空白なしで入れてください');
+    }
+  } else if (!apiKey) {
+    warn('案件の取り込み（AIでの読み取り）を使うには、GEMINI_API_KEY（無料枠あり）か ANTHROPIC_API_KEY を入れてください');
+  } else {
+    var models = UrlFetchApp.fetch('https://api.anthropic.com/v1/models?limit=1', {
+      headers: { 'x-api-key': apiKey, 'anthropic-version': ANTHROPIC_VERSION }, muteHttpExceptions: true
+    });
+    if (models.getResponseCode() === 200) ok('案件の読み取りは Claude を使います。ANTHROPIC_API_KEY は有効です');
+    else ng('ANTHROPIC_API_KEY が無効です（' + models.getResponseCode() + '）。Claude Console で発行した APIキー全体を、前後の空白なしで入れてください');
   }
 
   // 5. デプロイ済みのウェブアプリが最新のコードか
@@ -119,7 +156,25 @@ function checkSettings() {
     }
   }
 
-  // 6. 不採用通知の送信予定
+  // 6. 最近のエラー
+  try {
+    var logSheet = SpreadsheetApp.openById(props.SPREADSHEET_ID).getSheetByName(LOG_SHEET);
+    if (!logSheet) {
+      warn('シート「' + LOG_SHEET + '」がありません。setup を実行すると、エラーが記録されるようになります');
+    } else if (logSheet.getLastRow() >= 2) {
+      var from = Math.max(2, logSheet.getLastRow() - 9);
+      var logs = logSheet.getRange(from, 1, logSheet.getLastRow() - from + 1, 4).getValues();
+      lines.push('');
+      lines.push('【最近のエラー（新しい順・最大10件）】シート「' + LOG_SHEET + '」で全件を確認できます');
+      logs.reverse().forEach(function (r) { lines.push('・' + r[0] + '｜' + r[1] + '｜' + r[3]); });
+    } else {
+      ok('最近のエラーはありません');
+    }
+  } catch (err) {
+    warn('エラーログを確認できませんでした：' + err.message);
+  }
+
+  // 7. 不採用通知の送信予定
   try {
     var pending = pendingNotices_(new Date());
     if (pending.length) {

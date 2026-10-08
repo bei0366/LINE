@@ -10,7 +10,12 @@
  */
 
 /** 個人情報の取り扱いページ（liff/privacy.html）。別のページを使う場合はスクリプト プロパティ PRIVACY_POLICY_URL で上書き */
-var DEFAULT_PRIVACY_POLICY_URL = 'https://bei0366.github.io/LINE/liff/privacy.html';
+var DEFAULT_PRIVACY_POLICY_URL = 'https://seven-hearts.github.io/LINE/liff/privacy.html';
+
+/** 案件の読み取りに使う Claude のモデル。スクリプト プロパティ CLAUDE_MODEL で変更できる */
+var DEFAULT_CLAUDE_MODEL = 'claude-opus-5-5';
+/** 案件の読み取りに使う Gemini のモデル（最新の Flash を指す名前）。スクリプト プロパティ GEMINI_MODEL で変更できる */
+var DEFAULT_GEMINI_MODEL = 'gemini-flash-latest';
 
 function getConfig_() {
   var p = PropertiesService.getScriptProperties().getProperties();
@@ -23,8 +28,26 @@ function getConfig_() {
     driveFolderId: p.DRIVE_FOLDER_ID,
     adminEmail: p.ADMIN_EMAIL || '',
     privacyPolicyUrl: p.PRIVACY_POLICY_URL || DEFAULT_PRIVACY_POLICY_URL,
-    callUrl: (p.CALL_URL || '').trim()
+    callUrl: (p.CALL_URL || '').trim(),
+    // 面接を登録する Google カレンダー（空ならスクリプトを実行する人のメインのカレンダー、off なら登録しない）
+    calendarId: (p.CALENDAR_ID || '').trim(),
+    interviewMinutes: /^\d+$/.test((p.INTERVIEW_MINUTES || '').trim()) ? +p.INTERVIEW_MINUTES.trim() : 30,
+    anthropicApiKey: (p.ANTHROPIC_API_KEY || '').trim(),
+    claudeModel: (p.CLAUDE_MODEL || '').trim() || DEFAULT_CLAUDE_MODEL,
+    geminiApiKey: (p.GEMINI_API_KEY || '').trim(),
+    geminiModel: (p.GEMINI_MODEL || '').trim() || DEFAULT_GEMINI_MODEL,
+    // 読み取りに使う AI。AI_PROVIDER（gemini / claude）がなければ、APIキーが入っているほうを使う
+    aiProvider: aiProvider_(p),
+    // 入金予定月 = 売上計上月の何か月後か（取引先ごとに違う場合はシートで直してください）
+    paymentMonthsAfter: /^\d+$/.test((p.PAYMENT_MONTHS_AFTER || '').trim()) ? +p.PAYMENT_MONTHS_AFTER.trim() : 1
   };
+}
+
+function aiProvider_(p) {
+  var v = (p.AI_PROVIDER || '').trim().toLowerCase();
+  if (v === 'gemini' || v === 'claude') return v;
+  if ((p.GEMINI_API_KEY || '').trim()) return 'gemini';
+  return 'claude';
 }
 
 function json_(obj) {
@@ -58,7 +81,7 @@ function doPost(e) {
  * コードの版。コードを変えるたびに更新する。
  * checkSettings がウェブアプリ（デプロイ済み）の版と比べて、デプロイし忘れを見つける。
  */
-var APP_VERSION = '2026-10-05.11';
+var APP_VERSION = '2026-10-08.1';
 
 function doGet() {
   return json_({ ok: true, service: 'sevenhearts-staff-registration', version: APP_VERSION });
@@ -81,6 +104,7 @@ function notifyAdmin_(subject, name) {
  * - シートの作成と見出しの設定
  * - 提出書類を保存する Google ドライブのフォルダの作成
  * - ステータス変更を検知するトリガーの登録
+ * - Google カレンダーの権限の確認（面接日時を登録するため）
  */
 function setup() {
   var props = PropertiesService.getScriptProperties();
@@ -95,6 +119,8 @@ function setup() {
   ensureSheet_(ss, ONB_SHEET);
   ensureSheet_(ss, CHAT_SHEET);
   ensureSheet_(ss, SHIFT_SHEET);
+  ensureSheet_(ss, LOG_SHEET);
+  setupJobSheets_(ss);
 
   var statusCol = headerMap_(reg)['ステータス'] + 1;
   var values = Object.keys(STATUS).map(function (k) { return STATUS[k]; });
@@ -127,6 +153,9 @@ function setup() {
   // リマインド・通話ボタン・不採用通知・シフト提出の案内を時刻どおりに送るため、1分ごとに確認する
   if (handlers.indexOf('runScheduler') < 0) ScriptApp.newTrigger('runScheduler').timeBased().everyMinutes(1).create();
 
+  // カレンダーの権限をここで許可してもらう（許可がないと、1分ごとの自動処理でカレンダーに登録できない）
+  if (getConfig_().calendarId.toLowerCase() !== 'off') interviewCalendar_();
+
   console.log('セットアップ完了');
   console.log('Webhook URL: <ウェブアプリのURL>?token=' + props.getProperty('WEBHOOK_TOKEN'));
 }
@@ -138,9 +167,11 @@ function setup() {
  * - 書類落選 → すぐに不採用通知を送る
  * - 不採用 → 変更時刻を記録（通知は runScheduler が翌日の午前10時に送る）
  * - 採用 → 書類提出の案内を送って「書類依頼済」に
+ * シート「案件応募」の「状態」を変えたときは onApplyEdit_（JobsApp.gs）で確定・見送りの連絡を送る。
  */
 function onStatusEdit(e) {
   var sh = e.range.getSheet();
+  if (sh.getName() === APPLY_SHEET) return onApplyEdit_(e);
   if (sh.getName() !== REG_SHEET) return;
   var header = headerMap_(sh);
   var statusCol = header['ステータス'] + 1;
@@ -178,6 +209,7 @@ function onStatusEdit(e) {
       }
     } catch (err) {
       console.error('onStatusEdit failed', rec.userId, err && err.stack || err);
+      logError_('ステータス変更：' + rec.status, rec.userId, err);
     }
   });
 }
